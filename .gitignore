@@ -1,0 +1,34 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+dist/
+
+# Logs
+*.log
+logs/
+
+# Env
+.env
+.env.local
+.env.production
+.env.development
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temp
+.tmp/
+tmp/
+
+# Uploads generated locally if you don't want history
+backend/uploads/
+
+# Codex / local runtime
+.runtime/

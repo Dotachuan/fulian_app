@@ -1,0 +1,133 @@
+技术框架设计
+技术选型
+层级	技术	说明
+前端	Vue 3 + Vite	组合式 API，构建快
+UI 库	Element Plus	表格、表单、图表场景成熟
+图表	ECharts	折线/柱状/饼图
+状态管理	Pinia	Vue 3 官方推荐
+路由	Vue Router 4	支持路由守卫做权限控制
+后端	FastAPI (Python)	高性能、自动生成 API 文档
+ORM	SQLAlchemy + Alembic	数据库操作 + 迁移
+认证	JWT (python-jose)	无状态 Token 认证
+数据库	MySQL / PostgreSQL	选一即可
+文件存储	本地 / MinIO	附件上传
+导出	openpyxl	Excel 导出
+
+
+
+项目目录架构
+foundation-donation/
+├── frontend/                    # Vue 3 前端
+│   ├── src/
+│   │   ├── api/                 # Axios 请求封装
+│   │   │   ├── auth.js
+│   │   │   ├── donation.js
+│   │   │   ├── donor.js
+│   │   │   └── target.js
+│   │   ├── router/
+│   │   │   └── index.js         # 路由 + 权限守卫
+│   │   ├── stores/
+│   │   │   ├── user.js          # 用户/角色/Token
+│   │   │   └── app.js
+│   │   ├── views/
+│   │   │   ├── Login.vue
+│   │   │   ├── Dashboard.vue    # 统计首页
+│   │   │   ├── donation/
+│   │   │   │   ├── DonationList.vue
+│   │   │   │   ├── DonationForm.vue
+│   │   │   │   └── DonationDetail.vue
+│   │   │   ├── donor/
+│   │   │   │   └── DonorList.vue
+│   │   │   ├── target/
+│   │   │   │   └── TargetList.vue
+│   │   │   ├── stats/
+│   │   │   │   └── Statistics.vue
+│   │   │   ├── log/
+│   │   │   │   └── LogList.vue
+│   │   │   └── admin/
+│   │   │       └── UserManage.vue
+│   │   ├── components/
+│   │   │   ├── SearchBar.vue    # 通用查询栏
+│   │   │   ├── DataTable.vue    # 通用表格
+│   │   │   └── ChartCard.vue    # 图表卡片
+│   │   ├── utils/
+│   │   │   ├── request.js       # Axios + 拦截器
+│   │   │   └── permission.js    # 按钮级权限指令
+│   │   └── App.vue
+│   ├── package.json
+│   └── vite.config.js
+│
+└── backend/                     # FastAPI 后端
+    ├── app/
+    │   ├── api/
+    │   │   ├── v1/
+    │   │   │   ├── auth.py       # 登录/登出
+    │   │   │   ├── users.py      # 用户管理
+    │   │   │   ├── donations.py  # 捐款 CRUD
+    │   │   │   ├── donors.py     # 捐款人 CRUD
+    │   │   │   ├── targets.py    # 捐款目标 CRUD
+    │   │   │   ├── stats.py      # 统计接口
+    │   │   │   ├── logs.py       # 操作日志
+    │   │   │   └── export.py     # Excel 导出
+    │   ├── core/
+    │   │   ├── config.py         # 环境配置
+    │   │   ├── security.py       # JWT / 密码加密
+    │   │   └── deps.py           # 依赖注入（当前用户/权限）
+    │   ├── models/               # SQLAlchemy 模型
+    │   │   ├── user.py
+    │   │   ├── donation.py
+    │   │   ├── donor.py
+    │   │   ├── target.py
+    │   │   ├── attachment.py
+    │   │   └── log.py
+    │   ├── schemas/              # Pydantic 请求/响应模型
+    │   │   ├── user.py
+    │   │   ├── donation.py
+    │   │   └── ...
+    │   ├── crud/                 # 数据库操作层
+    │   │   ├── donation.py
+    │   │   └── ...
+    │   ├── db/
+    │   │   ├── database.py       # 数据库连接
+    │   │   └── init_db.py        # 初始化数据
+    │   └── main.py               # FastAPI 入口
+    ├── alembic/                  # 数据库迁移
+    ├── requirements.txt
+    └── .env
+
+
+
+核心接口规划
+POST   /api/v1/auth/login          # 登录
+POST   /api/v1/auth/logout         # 登出
+
+GET    /api/v1/donations           # 列表查询（多条件+分页）
+POST   /api/v1/donations           # 新增捐款
+GET    /api/v1/donations/{id}      # 详情
+PUT    /api/v1/donations/{id}      # 编辑
+DELETE /api/v1/donations/{id}      # 软删除
+GET    /api/v1/donations/export    # 导出 Excel
+
+GET    /api/v1/donors              # 捐款人列表
+POST   /api/v1/donors              # 新增捐款人
+...
+
+GET    /api/v1/targets             # 捐款目标列表
+...
+
+GET    /api/v1/stats/overview      # 统计概览
+GET    /api/v1/stats/trend         # 趋势数据
+
+GET    /api/v1/logs                # 操作日志
+
+
+
+权限控制方案
+前端：Vue Router 守卫 + v-permission 自定义指令
+后端：FastAPI Depends 注入角色校验
+
+角色层级：
+  admin      → 全部权限
+  operator   → 录入 / 编辑 / 查询
+  reviewer   → 审核 / 作废
+  viewer     → 只读查询

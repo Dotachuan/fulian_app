@@ -1,0 +1,15 @@
+[Unit]
+Description=Foundation Donation FastAPI Backend
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/srv/foundation-donation/backend
+EnvironmentFile=/srv/foundation-donation/backend/.env
+ExecStart=/srv/foundation-donation/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

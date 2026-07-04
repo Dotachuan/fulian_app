@@ -1,0 +1,142 @@
+{
+  "pages": [
+    {
+      "path": "src/pages/home/index",
+      "style": {
+        "navigationBarTitleText": "福莲小程序"
+      }
+    },
+    {
+      "path": "src/pages/login/index",
+      "style": {
+        "navigationBarTitleText": "会员登录"
+      }
+    },
+    {
+      "path": "src/pages/my/index",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "src/pages/donations/index",
+      "style": {
+        "navigationBarTitleText": "我的捐赠"
+      }
+    },
+    {
+      "path": "src/pages/certificate/index",
+      "style": {
+        "navigationBarTitleText": "捐赠证书"
+      }
+    },
+    {
+      "path": "src/pages/invoice/index",
+      "style": {
+        "navigationBarTitleText": "开票申请"
+      }
+    },
+    {
+      "path": "src/pages/directory/index",
+      "style": {
+        "navigationBarTitleText": "会员通讯录"
+      }
+    },
+    {
+      "path": "src/pages/news/index",
+      "style": {
+        "navigationBarTitleText": "新闻"
+      }
+    },
+    {
+      "path": "src/pages/news-detail/index",
+      "style": {
+        "navigationBarTitleText": "新闻详情"
+      }
+    },
+    {
+      "path": "src/pages/notices/index",
+      "style": {
+        "navigationBarTitleText": "公告"
+      }
+    },
+    {
+      "path": "src/pages/notice-detail/index",
+      "style": {
+        "navigationBarTitleText": "公告详情"
+      }
+    },
+    {
+      "path": "src/pages/funds/index",
+      "style": {
+        "navigationBarTitleText": "财务公示"
+      }
+    },
+    {
+      "path": "src/pages/fund-detail/index",
+      "style": {
+        "navigationBarTitleText": "基金明细"
+      }
+    },
+    {
+      "path": "src/pages/about/index",
+      "style": {
+        "navigationBarTitleText": "关于福莲"
+      }
+    },
+    {
+      "path": "src/pages/about-intro/index",
+      "style": {
+        "navigationBarTitleText": "机构简介"
+      }
+    },
+    {
+      "path": "src/pages/park/index",
+      "style": {
+        "navigationBarTitleText": "福莲产业园"
+      }
+    },
+    {
+      "path": "src/pages/projects/index",
+      "style": {
+        "navigationBarTitleText": "公益项目"
+      }
+    },
+    {
+      "path": "src/pages/webview/index",
+      "style": {
+        "navigationBarTitleText": "相关链接"
+      }
+    }
+  ],
+  "tabBar": {
+    "color": "#74829a",
+    "selectedColor": "#485291",
+    "backgroundColor": "#f7f9fc",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "src/pages/home/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "src/pages/directory/index",
+        "text": "会员通讯录"
+      },
+      {
+        "pagePath": "src/pages/about/index",
+        "text": "关于福莲"
+      },
+      {
+        "pagePath": "src/pages/my/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "福莲小程序",
+    "navigationBarBackgroundColor": "#f7f9fc",
+    "backgroundColor": "#f7f9fc"
+  }
+}
