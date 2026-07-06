@@ -22,6 +22,9 @@
         >
           {{ wechatLoggingIn ? '登录中...' : '微信手机号登录' }}
         </button>
+        <view class="field-tip">
+          开发者工具模拟器通常无法直接获取微信绑定手机号，请优先使用真机预览；联调阶段也可改用下方验证码登录。
+        </view>
         <!-- #endif -->
       </view>
 
@@ -168,6 +171,9 @@ async function handleSendCode() {
         showCancel: false,
       })
       // #endif
+      // #ifdef MP-WEIXIN
+      uni.showToast({ title: '验证码已自动填入', icon: 'none' })
+      // #endif
     } else {
       uni.showToast({ title: '验证码已发送', icon: 'none' })
     }
@@ -194,7 +200,7 @@ async function handleWechatPhoneLogin(event) {
 
   const phoneCode = event?.detail?.code
   if (!phoneCode) {
-    uni.showToast({ title: '未获取到微信手机号授权', icon: 'none' })
+    uni.showToast({ title: '当前环境未拿到微信手机号授权，请用真机预览或改用验证码登录', icon: 'none' })
     return
   }
 

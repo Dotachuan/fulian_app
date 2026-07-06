@@ -14,6 +14,11 @@ from app.schemas.member import (
     MemberAuthWechatPhoneLoginIn,
     MemberPublicOut,
 )
+from app.services.sms import (
+    SmsProviderError,
+    send_member_login_code as send_sms_login_code,
+    sms_provider_configured,
+)
 from app.services.wechat_miniapp import WechatMiniappError, get_phone_number
 
 router = APIRouter()
@@ -49,6 +54,14 @@ def send_member_login_code(
     db: Session = Depends(get_db),
 ):
     code = crud_member.create_login_code(db, data.phone)
+    if sms_provider_configured():
+        try:
+            send_sms_login_code(data.phone, code.code)
+        except SmsProviderError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    elif not settings.MEMBER_SMS_DEBUG_RETURN_CODE:
+        raise HTTPException(status_code=503, detail="SMS provider is not configured.")
+
     return {
         "success": True,
         "phone": data.phone,

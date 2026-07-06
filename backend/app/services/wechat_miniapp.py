@@ -74,13 +74,32 @@ def get_access_token() -> str:
         "grant_type": "client_credential",
         "appid": settings.WECHAT_MINIAPP_APPID,
         "secret": settings.WECHAT_MINIAPP_SECRET,
+        "force_refresh": False,
     }
     data = _post_json("https://api.weixin.qq.com/cgi-bin/stable_token", payload)
     access_token = data.get("access_token")
     if not access_token:
-        raise WechatMiniappError(
-            f"Failed to get Wechat access token: {data.get('errmsg', 'unknown error')}"
+        query = urlencode(
+            {
+                "grant_type": "client_credential",
+                "appid": settings.WECHAT_MINIAPP_APPID,
+                "secret": settings.WECHAT_MINIAPP_SECRET,
+            }
         )
+        fallback_url = f"https://api.weixin.qq.com/cgi-bin/token?{query}"
+        fallback_data = _get_json(fallback_url)
+        access_token = fallback_data.get("access_token")
+        if not access_token:
+            stable_errmsg = data.get("errmsg", "unknown error")
+            stable_errcode = data.get("errcode")
+            fallback_errmsg = fallback_data.get("errmsg", "unknown error")
+            fallback_errcode = fallback_data.get("errcode")
+            raise WechatMiniappError(
+                "Failed to get Wechat access token "
+                f"(stable_token: {stable_errcode} {stable_errmsg}; "
+                f"token: {fallback_errcode} {fallback_errmsg})"
+            )
+        data = fallback_data
 
     expires_in = int(data.get("expires_in") or 7200)
     _token_cache["value"] = access_token

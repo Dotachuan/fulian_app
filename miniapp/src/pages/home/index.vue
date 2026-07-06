@@ -180,7 +180,7 @@ import { computed, ref } from 'vue'
 import { getPublicNews, getPublicNotices, getPublicSiteContent } from '../../api/public'
 import { openExternalLink } from '../../utils/external-link'
 import { normalizeMediaUrl } from '../../utils/media'
-import heroImage from '../../static/home-hero-lotus.png'
+import heroImage from '../../static/home-hero-lotus.jpg'
 import foundationLogo from '../../static/foundation-logo.jpg'
 
 const newsItems = ref([])

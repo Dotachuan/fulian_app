@@ -63,7 +63,6 @@ import { getMemberCertificate } from '../../api/member'
 import { getBindingDescription, getMember, getMemberAccessState, goLogin, isLoggedIn } from '../../utils/auth'
 import { normalizeMediaUrl } from '../../utils/media'
 import certificateBorderAsset from '../../static/certificate-border-rococo-v4.jpg'
-import certificateTitleAsset from '../../static/certificate-title-gold-sans.png'
 
 const member = ref(getMember())
 const posterPath = ref('')
@@ -71,7 +70,6 @@ const loading = ref(false)
 const errorText = ref('')
 const sealImagePath = ref('')
 const borderImagePath = ref(certificateBorderAsset)
-const titleImagePath = ref(certificateTitleAsset)
 
 const canvasWidth = 1200
 const canvasHeight = 1697
@@ -411,25 +409,6 @@ function ensureBorderImage() {
   })
 }
 
-function ensureTitleImage() {
-  if (titleImagePath.value) {
-    return Promise.resolve(titleImagePath.value)
-  }
-  return new Promise((resolve, reject) => {
-    uni.getImageInfo({
-      src: certificateTitleAsset,
-      success: (res) => {
-        titleImagePath.value = res.path
-        resolve(res.path)
-      },
-      fail: () => {
-        titleImagePath.value = certificateTitleAsset
-        resolve(certificateTitleAsset)
-      },
-    })
-  })
-}
-
 function drawSealWatermark(ctx) {
   if (!sealImagePath.value) return
   ctx.save()
@@ -622,21 +601,14 @@ function drawCertificate(data) {
   drawSealWatermark(ctx)
   drawTopIdentity(ctx, width)
 
-  const titleSrc = titleImagePath.value || certificateTitleAsset
-  if (titleSrc) {
-    const titleWidth = 470
-    const titleHeight = 140
-    ctx.drawImage(titleSrc, width / 2 - titleWidth / 2, 344, titleWidth, titleHeight)
-  } else {
-    drawFoilText(ctx, '捐赠证书', width / 2, 438, {
-      size: 108,
-      family: '"STXinwei","华文新魏","STLiti","LiSu","STSong",serif',
-      weight: '700',
-      align: 'center',
-      letterSpacing: 6,
-      glow: true,
-    })
-  }
+  drawFoilText(ctx, '捐赠证书', width / 2, 438, {
+    size: 108,
+    family: '"Source Han Sans SC","Noto Sans CJK SC","Microsoft YaHei","PingFang SC",sans-serif',
+    weight: '700',
+    align: 'center',
+    letterSpacing: 8,
+    glow: true,
+  })
 
   drawFoilText(ctx, 'CERTIFICATE OF DONATION', width / 2, 508, {
     size: 26,
@@ -685,7 +657,7 @@ async function loadData() {
 
   loading.value = true
   try {
-    await Promise.all([ensureSealImage(), ensureBorderImage(), ensureTitleImage()])
+    await Promise.all([ensureSealImage(), ensureBorderImage()])
     const res = await getMemberCertificate()
     if (!res?.total_count) {
       errorText.value = '当前暂无可生成证书的捐赠数据'

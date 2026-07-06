@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     PUBLIC_ASSET_ORIGIN: str = "https://api.fulian520.com"
     MEMBER_SMS_DEBUG_RETURN_CODE: bool = True
+    MEMBER_SMS_PROVIDER: str = ""
+    MEMBER_SMS_SIGN_NAME: str = ""
+    MEMBER_SMS_TEMPLATE_CODE: str = ""
+    MEMBER_SMS_ACCESS_KEY_ID: str = ""
+    MEMBER_SMS_ACCESS_KEY_SECRET: str = ""
+    MEMBER_SMS_TEMPLATE_PARAM_NAME: str = "code"
+    MEMBER_SMS_API_TIMEOUT_SECONDS: int = 10
     WECHAT_MINIAPP_APPID: str = ""
     WECHAT_MINIAPP_SECRET: str = ""
     WECHAT_API_TIMEOUT_SECONDS: int = 10
