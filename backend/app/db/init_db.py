@@ -4,7 +4,7 @@ from app.core.security import hash_password
 from app.db.database import Base
 
 # Import all models to ensure metadata registration.
-from app.models import attachment, donation, donor, fund, invoice_request, log, member, member_suggestion, news, notice, park_link, project_link, site_content, target, user  # noqa
+from app.models import attachment, donation, donor, fund, invoice_request, log, member, member_binding_request, member_suggestion, news, notice, park_link, project_link, site_content, target, user  # noqa
 
 
 def init(engine: Engine):

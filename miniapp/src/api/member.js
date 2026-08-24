@@ -52,6 +52,12 @@ export const syncMemberAvatarFromUrl = (data) =>
 export const redeemMemberBindingCode = (data) =>
   request({ url: '/member/binding-code/redeem', method: 'POST', data, auth: true })
 
+export const getLatestMemberBindingRequest = () =>
+  request({ url: '/member/binding-request/latest', auth: true })
+
+export const createMemberBindingRequest = (data) =>
+  request({ url: '/member/binding-request', method: 'POST', data, auth: true })
+
 export const getMemberDonations = (data) =>
   request({ url: '/member/donations', data, auth: true })
 

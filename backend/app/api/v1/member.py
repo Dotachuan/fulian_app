@@ -23,6 +23,8 @@ from app.schemas.fund import FundPublicOut, PublicFundUsagePage
 from app.schemas.invoice_request import InvoiceRequestCreate, InvoiceRequestPublicOut
 from app.schemas.member import (
     MemberBindingCodeRedeemIn,
+    MemberBindingRequestCreate,
+    MemberBindingRequestOut,
     MemberCertificateOut,
     MemberAvatarFromUrlIn,
     MemberDirectoryItem,
@@ -74,6 +76,24 @@ def _serialize_member_profile(member) -> MemberProfileOut:
         "phone": member.phone or "",
         "phone_note": "电话号码仅用于身份验证，不会在通讯录中公开展示。",
     }
+
+
+def _serialize_binding_request(item) -> MemberBindingRequestOut:
+    return MemberBindingRequestOut(
+        id=item.id,
+        member_id=item.member_id,
+        member_name=item.member.name if item.member else None,
+        member_phone=item.member.phone if item.member else None,
+        name=item.name,
+        phone=item.phone,
+        status=item.status,
+        donor_id=item.donor_id,
+        donor_name=item.donor.name if item.donor else None,
+        admin_note=item.admin_note,
+        handled_at=item.handled_at,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
 
 
 def _detect_avatar_suffix(filename: str = "", content_type: str = "") -> str:
@@ -165,6 +185,33 @@ def update_member_profile(
 ):
     member = crud_member.update_member_profile(db, current_member, data)
     return _serialize_member_profile(member)
+
+
+@router.get("/member/binding-request/latest", response_model=MemberBindingRequestOut | None)
+def get_latest_binding_request(
+    db: Session = Depends(get_db),
+    current_member=Depends(get_current_member),
+):
+    item = crud_member.get_latest_member_binding_request(db, current_member.id)
+    if not item:
+        return None
+    return _serialize_binding_request(item)
+
+
+@router.post("/member/binding-request", response_model=MemberBindingRequestOut, status_code=201)
+def create_binding_request(
+    data: MemberBindingRequestCreate,
+    db: Session = Depends(get_db),
+    current_member=Depends(get_current_member),
+):
+    if current_member.donor_id:
+        raise HTTPException(status_code=400, detail="当前会员已完成绑定")
+    item = crud_member.create_member_binding_request(db, current_member, data.name, data.phone)
+    current_member.name = data.name
+    current_member.binding_status = "unbound"
+    db.commit()
+    db.refresh(item)
+    return _serialize_binding_request(item)
 
 
 @router.post("/member/profile/avatar", response_model=MemberProfileOut)

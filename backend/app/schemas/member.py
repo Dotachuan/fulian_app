@@ -312,6 +312,61 @@ class PageMemberSuggestion(BaseModel):
     total: int
 
 
+class MemberBindingRequestCreate(BaseModel):
+    name: str
+    phone: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_request_name(cls, value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ValueError("请输入姓名")
+        if len(text) > 64:
+            raise ValueError("姓名不能超过 64 个字")
+        return text
+
+    @field_validator("phone")
+    @classmethod
+    def validate_request_phone(cls, value: str) -> str:
+        phone = _normalize_phone(value)
+        if not MOBILE_PHONE_PATTERN.fullmatch(phone):
+            raise ValueError("请输入正确的手机号码")
+        return phone
+
+
+class MemberBindingRequestOut(BaseModel):
+    id: int
+    member_id: int
+    member_name: Optional[str] = None
+    member_phone: Optional[str] = None
+    name: str
+    phone: str
+    status: str
+    donor_id: Optional[int] = None
+    donor_name: Optional[str] = None
+    admin_note: Optional[str] = None
+    handled_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class PageMemberBindingRequest(BaseModel):
+    items: list[MemberBindingRequestOut]
+    total: int
+
+
+class MemberBindingRequestApproveIn(BaseModel):
+    donor_id: int
+    admin_note: str = ""
+
+
+class MemberBindingRequestRejectIn(BaseModel):
+    admin_note: str = ""
+
+
 class MemberDirectoryItem(BaseModel):
     id: int
     name: Optional[str] = None

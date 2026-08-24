@@ -10,6 +10,7 @@ from app.crud import donor as crud_donor
 from app.models.donation import Donation
 from app.models.donor import Donor
 from app.models.member import Member, MemberLoginCode
+from app.models.member_binding_request import MemberBindingRequest
 from app.schemas.member import MemberBindingCodeCreateIn, MemberProfileUpdate, MemberUpdate
 
 MEMBER_LEVEL_DIRECTOR = "director"
@@ -20,6 +21,7 @@ DIRECTOR_DONATION_THRESHOLD = Decimal("30000")
 BINDING_SOURCE_AUTO = "auto"
 BINDING_SOURCE_MANUAL = "manual"
 BINDING_SOURCE_CODE = "code"
+BINDING_SOURCE_REQUEST = "request"
 
 
 def get_member_level_label(level: str) -> str:
@@ -39,7 +41,7 @@ def _binding_status_for_matches(match_count: int) -> str:
 
 
 def _is_manual_binding_source(source: Optional[str]) -> bool:
-    return source in {BINDING_SOURCE_MANUAL, BINDING_SOURCE_CODE}
+    return source in {BINDING_SOURCE_MANUAL, BINDING_SOURCE_CODE, BINDING_SOURCE_REQUEST}
 
 
 def _release_member_donor(db: Session, member: Member):
@@ -127,20 +129,9 @@ def sync_member_binding(db: Session, member: Member) -> Member:
                 db.refresh(member)
                 return member
 
-    matches = find_donor_matches(db, member.phone)
-    available_matches = [donor for donor in matches if not donor.binding_bound_member_id or donor.binding_bound_member_id == member.id]
-
-    if len(available_matches) == 1:
-        donor = available_matches[0]
-        _bind_member_to_donor(db, member, donor, BINDING_SOURCE_AUTO, allow_takeover=False)
-    elif len(matches) > 1:
-        _release_member_donor(db, member)
-        member.binding_status = "ambiguous"
-        member.binding_source = BINDING_SOURCE_AUTO
-    else:
-        _release_member_donor(db, member)
-        member.binding_status = "unbound"
-        member.binding_source = BINDING_SOURCE_AUTO
+    _release_member_donor(db, member)
+    member.binding_status = "unbound"
+    member.binding_source = BINDING_SOURCE_AUTO
 
     db.commit()
     db.refresh(member)
@@ -321,9 +312,119 @@ def update_member_profile(db: Session, member: Member, data: MemberProfileUpdate
     member.work_unit = data.work_unit or None
     member.resident_city = data.resident_city or None
     member.phone = data.phone
-    sync_member_binding(db, member)
+    if not member.donor_id:
+        member.binding_status = "unbound"
+        member.binding_source = BINDING_SOURCE_AUTO
+    db.commit()
     db.refresh(member)
     return member
+
+
+def create_member_binding_request(db: Session, member: Member, name: str, phone: str) -> MemberBindingRequest:
+    pending = (
+        db.query(MemberBindingRequest)
+        .filter(
+            MemberBindingRequest.member_id == member.id,
+            MemberBindingRequest.status == "pending",
+        )
+        .order_by(MemberBindingRequest.id.desc())
+        .first()
+    )
+    if pending:
+        pending.name = name
+        pending.phone = phone
+        db.commit()
+        db.refresh(pending)
+        return pending
+
+    item = MemberBindingRequest(
+        member_id=member.id,
+        name=name,
+        phone=phone,
+        status="pending",
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def get_latest_member_binding_request(db: Session, member_id: int) -> Optional[MemberBindingRequest]:
+    return (
+        db.query(MemberBindingRequest)
+        .filter(MemberBindingRequest.member_id == member_id)
+        .order_by(MemberBindingRequest.id.desc())
+        .first()
+    )
+
+
+def list_member_binding_requests(
+    db: Session,
+    keyword: str = "",
+    status: str = "",
+    page: int = 1,
+    page_size: int = 20,
+):
+    q = db.query(MemberBindingRequest)
+    if keyword:
+        like = f"%{keyword.strip()}%"
+        q = q.join(Member, MemberBindingRequest.member_id == Member.id).filter(
+            (MemberBindingRequest.name.like(like))
+            | (MemberBindingRequest.phone.like(like))
+            | (Member.phone.like(like))
+            | (Member.name.like(like))
+        )
+    if status:
+        q = q.filter(MemberBindingRequest.status == status)
+    total = q.count()
+    items = (
+        q.order_by(MemberBindingRequest.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return items, total
+
+
+def approve_member_binding_request(
+    db: Session,
+    item: MemberBindingRequest,
+    donor_id: int,
+    admin_user_id: int,
+    admin_note: str = "",
+) -> MemberBindingRequest:
+    member = db.get(Member, item.member_id)
+    donor = db.get(Donor, donor_id)
+    if not member:
+        raise ValueError("member not found")
+    if not donor or donor.is_deleted:
+        raise ValueError("donor not found")
+    _bind_member_to_donor(db, member, donor, BINDING_SOURCE_REQUEST, allow_takeover=True)
+    if not member.name:
+        member.name = item.name
+    item.status = "approved"
+    item.donor_id = donor.id
+    item.admin_note = admin_note or None
+    item.handled_by = admin_user_id
+    item.handled_at = datetime.now()
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def reject_member_binding_request(
+    db: Session,
+    item: MemberBindingRequest,
+    admin_user_id: int,
+    admin_note: str = "",
+) -> MemberBindingRequest:
+    item.status = "rejected"
+    item.admin_note = admin_note or None
+    item.handled_by = admin_user_id
+    item.handled_at = datetime.now()
+    db.commit()
+    db.refresh(item)
+    return item
 
 
 def list_donor_candidates(db: Session, keyword: str = "", page_size: int = 20):

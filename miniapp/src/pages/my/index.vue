@@ -76,6 +76,19 @@
           <view class="service-arrow">→</view>
         </view>
 
+        <view class="service-row" @click="scrollToBindingRequest()">
+          <view class="service-icon service-icon-suggestion">
+            <view class="glyph-chat"></view>
+            <view class="glyph-chat-line glyph-chat-line-one"></view>
+            <view class="glyph-chat-line glyph-chat-line-two"></view>
+          </view>
+          <view class="service-copy">
+            <view class="service-title">会员绑定</view>
+            <view class="service-desc">提交姓名与手机号，由管理员人工比对绑定。</view>
+          </view>
+          <view class="service-arrow">→</view>
+        </view>
+
         <view class="service-row" @click="scrollToSuggestion()">
           <view class="service-icon service-icon-suggestion">
             <view class="glyph-chat"></view>
@@ -125,19 +138,40 @@
       </view>
     </view>
 
-    <view v-if="member && memberState !== 'bound'" class="profile-band profile-band-muted">
+    <view v-if="member" id="binding-request-section" class="profile-band profile-band-muted">
       <view class="band-head compact-head">
-        <view class="band-title">输入绑定码</view>
+        <view class="band-title">{{ memberState === 'bound' ? '会员绑定' : '提交绑定申请' }}</view>
       </view>
-      <view class="state-copy">如果当前手机号没有自动匹配到唯一捐赠人，可联系管理员获取绑定码，在这里完成身份绑定。</view>
-      <view class="binding-code-row">
-        <input
-          v-model="bindingCodeForm.code"
-          class="binding-code-input"
-          placeholder="请输入绑定码"
-          maxlength="16"
-        />
-        <view class="binding-code-btn" @click="submitBindingCode">{{ redeeming ? '提交中...' : '确认绑定' }}</view>
+      <view class="state-copy">
+        {{ memberState === 'bound' ? '当前会员已完成捐赠人绑定。' : '请填写姓名和手机号提交申请，管理员会根据后台捐赠记录进行人工比对并完成绑定。' }}
+      </view>
+      <view v-if="memberState === 'bound'" class="binding-request-status">
+        <view class="binding-request-line">
+          <text>绑定状态：</text>
+          <text>已完成绑定</text>
+        </view>
+      </view>
+      <view v-else-if="bindingRequest" class="binding-request-status">
+        <view class="binding-request-line">
+          <text>最近申请：</text>
+          <text>{{ requestStatusText(bindingRequest.status) }}</text>
+        </view>
+        <view v-if="bindingRequest.admin_note" class="binding-request-note">{{ bindingRequest.admin_note }}</view>
+      </view>
+      <view v-if="memberState !== 'bound'" class="profile-form compact-form">
+        <view class="form-row">
+          <view class="form-label">姓名</view>
+          <input v-model="bindingRequestForm.name" class="form-input" placeholder="请输入姓名" />
+        </view>
+        <view class="form-row">
+          <view class="form-label">手机号</view>
+          <input v-model="bindingRequestForm.phone" class="form-input" placeholder="请输入手机号码" type="number" />
+        </view>
+        <view class="form-actions">
+          <view class="button-primary form-save" @click="submitBindingRequest">
+            {{ submittingBindingRequest ? '提交中...' : bindingRequest?.status === 'pending' ? '更新申请' : '提交申请' }}
+          </view>
+        </view>
       </view>
     </view>
 
@@ -206,10 +240,11 @@
 import { computed, reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import {
+  createMemberBindingRequest,
   createMemberSuggestion,
+  getLatestMemberBindingRequest,
   getMemberMe,
   getMemberProfile,
-  redeemMemberBindingCode,
   updateMemberProfile,
   uploadMemberAvatar,
 } from '../../api/member'
@@ -230,8 +265,8 @@ import {
 
 const member = ref(getMember())
 const saving = ref(false)
-const redeeming = ref(false)
 const submittingSuggestion = ref(false)
+const submittingBindingRequest = ref(false)
 const avatarUploading = ref(false)
 const profileForm = reactive({
   name: '',
@@ -239,8 +274,10 @@ const profileForm = reactive({
   resident_city: '',
   phone: '',
 })
-const bindingCodeForm = reactive({
-  code: '',
+const bindingRequest = ref(null)
+const bindingRequestForm = reactive({
+  name: '',
+  phone: '',
 })
 const suggestionForm = reactive({
   contact: '',
@@ -289,6 +326,8 @@ function fillProfileForm(payload = {}) {
   profileForm.work_unit = payload.work_unit || ''
   profileForm.resident_city = payload.resident_city || ''
   profileForm.phone = payload.phone || member.value?.phone || ''
+  if (!bindingRequestForm.name) bindingRequestForm.name = profileForm.name
+  if (!bindingRequestForm.phone) bindingRequestForm.phone = profileForm.phone
 }
 
 async function loadProfile() {
@@ -303,6 +342,13 @@ async function loadProfile() {
   member.value = latestMember
   setMember(latestMember)
   fillProfileForm(profile)
+  if (latestMember?.binding_status !== 'bound') {
+    bindingRequest.value = await getLatestMemberBindingRequest().catch(() => null)
+    bindingRequestForm.name = bindingRequest.value?.name || profile.name || latestMember.name || ''
+    bindingRequestForm.phone = bindingRequest.value?.phone || profile.phone || latestMember.phone || ''
+  } else {
+    bindingRequest.value = null
+  }
 }
 
 async function loadContact() {
@@ -343,6 +389,17 @@ function scrollToSuggestion() {
   }
   uni.pageScrollTo({
     selector: '#suggestion-section',
+    duration: 220,
+  })
+}
+
+function scrollToBindingRequest() {
+  if (!member.value) {
+    goLogin()
+    return
+  }
+  uni.pageScrollTo({
+    selector: '#binding-request-section',
     duration: 220,
   })
 }
@@ -392,23 +449,31 @@ async function chooseAvatarFromAlbum() {
   }
 }
 
-async function submitBindingCode() {
-  if (!member.value || redeeming.value) return
-  const code = String(bindingCodeForm.code || '').trim().toUpperCase()
-  if (!code) {
-    uni.showToast({ title: '请输入绑定码', icon: 'none' })
+function requestStatusText(status) {
+  return { pending: '待管理员处理', approved: '已通过', rejected: '已驳回' }[status] || status || '-'
+}
+
+async function submitBindingRequest() {
+  if (!member.value || submittingBindingRequest.value) return
+  const name = String(bindingRequestForm.name || '').trim()
+  const phone = String(bindingRequestForm.phone || '').trim()
+  if (!name) {
+    uni.showToast({ title: '请输入姓名', icon: 'none' })
     return
   }
-  redeeming.value = true
+  if (!/^1[3-9]\d{9}$/.test(phone)) {
+    uni.showToast({ title: '请输入正确手机号', icon: 'none' })
+    return
+  }
+  submittingBindingRequest.value = true
   try {
-    await redeemMemberBindingCode({ code })
-    bindingCodeForm.code = ''
+    bindingRequest.value = await createMemberBindingRequest({ name, phone })
     const latestMember = await getMemberMe()
     member.value = latestMember
     setMember(latestMember)
-    uni.showToast({ title: '绑定成功', icon: 'none' })
+    uni.showToast({ title: '申请已提交', icon: 'none' })
   } finally {
-    redeeming.value = false
+    submittingBindingRequest.value = false
   }
 }
 
@@ -997,6 +1062,33 @@ onShow(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.binding-request-status {
+  margin: 20rpx 0 18rpx;
+  padding: 18rpx 22rpx;
+  border-left: 6rpx solid #485291;
+  background: rgba(72, 82, 145, 0.07);
+}
+
+.binding-request-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #273244;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.binding-request-note {
+  margin-top: 10rpx;
+  color: #74829a;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.compact-form {
+  margin-top: 20rpx;
 }
 
 .logout-row {

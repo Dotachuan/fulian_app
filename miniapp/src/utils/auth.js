@@ -76,9 +76,9 @@ export function getBindingBadgeClass(member = getMember()) {
 export function getBindingDescription(member = getMember()) {
   return {
     guest: '登录后可查看本人捐赠、开票申请、会员通讯录与基金公示信息。',
-    bound: '当前手机号已完成资料匹配，可以正常使用会员专属服务。',
-    pending: '当前手机号尚未匹配到唯一捐赠人，请联系后台管理员完成绑定。',
-    ambiguous: '当前手机号匹配到多条记录，需要后台人工确认后开放完整能力。',
+    bound: '当前会员已完成捐赠人绑定，可正常使用会员专属服务。',
+    pending: '请在“我的”页面提交姓名和手机号，等待管理员根据捐赠记录完成绑定。',
+    ambiguous: '当前账号需要后台人工确认后才能开放完整会员能力。',
     member: '当前会员状态待确认，请稍后再试或联系管理员。',
   }[getMemberAccessState(member)]
 }

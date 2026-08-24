@@ -13,6 +13,7 @@ from app.models.park_link import ParkLink
 from app.models.project_link import ProjectLink
 from app.models.site_content import SiteContent
 from app.models.member_suggestion import MemberSuggestion
+from app.models.member_binding_request import MemberBindingRequest
 
 __all__ = [
     "User",
@@ -33,4 +34,5 @@ __all__ = [
     "ProjectLink",
     "SiteContent",
     "MemberSuggestion",
+    "MemberBindingRequest",
 ]

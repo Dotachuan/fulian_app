@@ -15,6 +15,15 @@ export const getMemberBindingCodeApi = (id) =>
 export const createMemberBindingCodeApi = (id, data) =>
   request.post(`/members/${id}/binding-code`, data)
 
+export const getMemberBindingRequestListApi = (params) =>
+  request.get('/members/binding-requests', { params })
+
+export const approveMemberBindingRequestApi = (id, data) =>
+  request.post(`/members/binding-requests/${id}/approve`, data)
+
+export const rejectMemberBindingRequestApi = (id, data) =>
+  request.post(`/members/binding-requests/${id}/reject`, data)
+
 export const getMemberSuggestionListApi = (params) =>
   request.get('/members/suggestions', { params })
 

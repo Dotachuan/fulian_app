@@ -11,15 +11,20 @@ from app.core.deps import get_db, require_roles
 from app.crud import log as crud_log
 from app.crud import member as crud_member
 from app.models.member_suggestion import MemberSuggestion
+from app.models.member_binding_request import MemberBindingRequest
 from app.models.user import User
 from app.schemas.donor import DonorOut
 from app.schemas.member import (
     MemberBindingCodeCreateIn,
     MemberBindingCodeOut,
+    MemberBindingRequestApproveIn,
+    MemberBindingRequestOut,
+    MemberBindingRequestRejectIn,
     MemberSuggestionAdminOut,
     MemberSuggestionAdminUpdate,
     MemberPublicOut,
     MemberUpdate,
+    PageMemberBindingRequest,
     PageMemberSuggestion,
     PageMember,
 )
@@ -75,6 +80,24 @@ def _serialize_suggestion(item: MemberSuggestion) -> MemberSuggestionAdminOut:
         contact=item.contact or "",
         content=item.content,
         status=item.status,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
+
+
+def _serialize_binding_request(item: MemberBindingRequest) -> MemberBindingRequestOut:
+    return MemberBindingRequestOut(
+        id=item.id,
+        member_id=item.member_id,
+        member_name=item.member.name if item.member else None,
+        member_phone=item.member.phone if item.member else None,
+        name=item.name,
+        phone=item.phone,
+        status=item.status,
+        donor_id=item.donor_id,
+        donor_name=item.donor.name if item.donor else None,
+        admin_note=item.admin_note,
+        handled_at=item.handled_at,
         created_at=item.created_at,
         updated_at=item.updated_at,
     )
@@ -216,6 +239,89 @@ def export_member_suggestions(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=member_suggestions.xlsx"},
     )
+
+
+@router.get("/members/binding-requests", response_model=PageMemberBindingRequest)
+def list_member_binding_requests(
+    keyword: str = "",
+    status: str = "",
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("admin", "operator")),
+):
+    items, total = crud_member.list_member_binding_requests(
+        db,
+        keyword=keyword,
+        status=status,
+        page=page,
+        page_size=page_size,
+    )
+    return {"items": [_serialize_binding_request(item) for item in items], "total": total}
+
+
+@router.post("/members/binding-requests/{request_id}/approve", response_model=MemberBindingRequestOut)
+def approve_member_binding_request(
+    request_id: int,
+    data: MemberBindingRequestApproveIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("admin", "operator")),
+):
+    item = db.get(MemberBindingRequest, request_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="binding request not found")
+    if item.status != "pending":
+        raise HTTPException(status_code=400, detail="binding request already handled")
+    try:
+        item = crud_member.approve_member_binding_request(
+            db,
+            item,
+            donor_id=data.donor_id,
+            admin_user_id=current_user.id,
+            admin_note=data.admin_note,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    crud_log.add(
+        db,
+        current_user.id,
+        current_user.username,
+        "approve",
+        "member_binding_request",
+        item.id,
+        f"approve member binding request {item.id}",
+    )
+    return _serialize_binding_request(item)
+
+
+@router.post("/members/binding-requests/{request_id}/reject", response_model=MemberBindingRequestOut)
+def reject_member_binding_request(
+    request_id: int,
+    data: MemberBindingRequestRejectIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("admin", "operator")),
+):
+    item = db.get(MemberBindingRequest, request_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="binding request not found")
+    if item.status != "pending":
+        raise HTTPException(status_code=400, detail="binding request already handled")
+    item = crud_member.reject_member_binding_request(
+        db,
+        item,
+        admin_user_id=current_user.id,
+        admin_note=data.admin_note,
+    )
+    crud_log.add(
+        db,
+        current_user.id,
+        current_user.username,
+        "reject",
+        "member_binding_request",
+        item.id,
+        f"reject member binding request {item.id}",
+    )
+    return _serialize_binding_request(item)
 
 
 @router.put("/members/{member_id}", response_model=MemberPublicOut)
