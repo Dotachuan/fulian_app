@@ -1,370 +1,400 @@
 <template>
-  <view class="page about-page">
-    <view class="about-hero">
-      <image class="about-hero-image" :src="heroImage" mode="aspectFill" />
-      <view class="about-hero-overlay"></view>
-      <view class="about-hero-inner">
-        <view class="about-hero-kicker">公开信息</view>
-        <view class="about-hero-title">关于福莲</view>
-        <view class="about-hero-desc">围绕产业协作、公益项目、财务公示与治理信息，形成一套清晰、连续、便于查阅的公开界面。</view>
-      </view>
+  <view class="page finance-tab-page">
+    <view class="finance-hero">
+      <view class="hero-mark">FULIAN DISCLOSURE</view>
+      <view class="finance-title">财务公示</view>
     </view>
 
-    <view class="about-layout">
-      <view class="about-nav">
-        <view
-          v-for="section in sections"
-          :key="section.key"
-          class="about-nav-item"
-          :class="{ 'about-nav-item-active': activeSection === section.key }"
-          @click="activeSection = section.key"
-        >
-          <view class="about-nav-texts">
-            <view class="about-nav-title">{{ section.title }}</view>
-            <view class="about-nav-note">{{ section.note }}</view>
-          </view>
-          <view class="about-nav-arrow">→</view>
-        </view>
-      </view>
+    <view v-if="!loggedIn" class="finance-state">
+      <view class="state-title">请先登录</view>
+      <view class="state-desc">财务公示面向登录会员开放。</view>
+      <view class="button-primary state-action" @click="goLogin">去登录</view>
+    </view>
 
-      <view class="about-main">
-        <view class="about-section-head">
-          <view class="section-kicker">{{ activeSectionData.kicker }}</view>
-          <view class="about-section-title">{{ activeSectionData.title }}</view>
-          <view class="about-section-summary">{{ activeSectionData.summary }}</view>
+    <template v-else>
+      <view class="report-section">
+        <view class="section-heading">
+          <view>
+            <view class="section-title">年度报告</view>
+            <view class="section-line"></view>
+          </view>
+          <view class="section-note">点击报告浏览</view>
         </view>
 
-        <view class="about-feature-band">
-          <view class="about-feature-index">{{ activeSectionData.index }}</view>
-          <view class="about-feature-copy">
-            <view class="about-feature-title">{{ activeSectionData.featureTitle }}</view>
-            <view class="about-feature-desc">{{ activeSectionData.featureDesc }}</view>
-          </view>
+        <view v-if="reports.length" class="report-list">
           <view
-            class="about-feature-action"
-            :class="{ 'about-feature-action-disabled': activeSectionData.pending }"
-            @click="openSection(activeSectionData)"
+            v-for="report in reports"
+            :key="report.id"
+            class="report-row"
+            :class="{ disabled: !report.url }"
+            @click="openReport(report)"
           >
-            {{ activeSectionData.actionText }}
-          </view>
-        </view>
-
-        <view class="about-detail-list">
-          <view
-            v-for="item in activeSectionData.items"
-            :key="item.title"
-            class="about-detail-row"
-            @click="openRow(item, activeSectionData)"
-          >
-            <view class="about-detail-main">
-              <view class="row-between">
-                <view class="list-title">{{ item.title }}</view>
-                <text v-if="item.tag" class="about-inline-tag">{{ item.tag }}</text>
-              </view>
-              <view class="list-desc">{{ item.desc }}</view>
+            <view class="report-year">{{ report.year }}</view>
+            <view class="report-main">
+              <view class="report-title">{{ report.title }}</view>
+              <view class="report-meta">{{ report.period }}</view>
             </view>
-            <view class="about-detail-tail">{{ item.tail || '查看' }}</view>
+            <view class="report-action">
+              <view v-if="report.url" class="action-text">浏览</view>
+              <view v-else class="pending-text">待上传</view>
+              <view class="arrow-line"></view>
+            </view>
           </view>
         </view>
+
+        <view v-else class="empty-block">暂无财务报告</view>
       </view>
-    </view>
+    </template>
   </view>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import heroImage from '../../static/foundation-home-reference.jpeg'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+import { getAssetOrigin } from '../../config/env'
+import { goLogin, isLoggedIn } from '../../utils/auth'
 
-const activeSection = ref('park')
+const loggedIn = ref(isLoggedIn())
+const reportBaseUrl = `${getAssetOrigin()}/uploads/finance-reports`
 
-const sections = [
+const reports = ref([
   {
-    key: 'park',
-    title: '福莲产业园',
-    note: '介绍与资讯',
-    kicker: '模块一',
-    index: '01',
-    summary: '集中展示福莲产业园的定位、合作方向与相关资讯，作为机构协作与资源联动的重要窗口。',
-    featureTitle: '产业园介绍与新闻入口',
-    featureDesc: '当前版本先开放介绍与相关资讯列表，后续可继续扩展合作项目与阶段性进展展示。',
-    actionText: '进入页面',
-    url: '/pages/park/index',
-    items: [
-      { title: '产业园简介', desc: '查看福莲产业园的定位说明与发展方向。', tag: '已接入', tail: '进入', url: '/pages/park/index' },
-      { title: '相关资讯', desc: '查看与产业园相关的机构新闻与合作动态。', tag: '已接入', tail: '查看', url: '/pages/park/index' },
-    ],
+    id: '2026-q1',
+    year: '2026',
+    title: '福莲教育促进会 2026 年 1-3 月财务情况报告',
+    period: '2026 年第一季度',
+    url: `${reportBaseUrl}/fulian-finance-2026-q1.pdf`,
   },
   {
-    key: 'projects',
-    title: '公益项目进展',
-    note: '四类固定板块',
-    kicker: '模块二',
-    index: '02',
-    summary: '围绕主基金、医学基金、公益活动与专项基金四个板块，统一展示资金概况与相关新闻。',
-    featureTitle: '公益项目进展聚合页',
-    featureDesc: '集中查看四类板块的资金简介、收入支出与相关资讯入口，便于统一浏览。',
-    actionText: '进入页面',
-    url: '/pages/projects/index',
-    items: [
-      { title: '福莲教育主基金', desc: '查看主基金概况、资金使用与相关资讯。', tag: '已接入', tail: '进入', url: '/pages/projects/index' },
-      { title: '福莲医学基金', desc: '查看医学基金的资金情况与动态。', tag: '已接入', tail: '进入', url: '/pages/projects/index' },
-      { title: '福莲公益活动 / 专项基金', desc: '统一查看活动与专项基金的资金及资讯。', tag: '已接入', tail: '进入', url: '/pages/projects/index' },
-    ],
+    id: '2025-annual',
+    year: '2025',
+    title: '福莲教育促进会 2025 年 1-12 月财务情况报告',
+    period: '2025 年度',
+    url: `${reportBaseUrl}/fulian-finance-2025-annual.pdf`,
   },
   {
-    key: 'finance',
-    title: '财务公示',
-    note: '当前已可访问',
-    kicker: '模块三',
-    index: '03',
-    summary: '登录会员后可查看基金列表、当前余额与收支明细，是关于福莲栏目中的核心公开部分。',
-    featureTitle: '基金收支与项目明细',
-    featureDesc: '当前已接入基金列表与单项基金明细查询，并统一替换了旧的导入文案。',
-    actionText: '进入公示',
-    url: '/pages/funds/index',
-    items: [
-      { title: '基金列表', desc: '查看当前可公开展示的基金项目与概况信息。', tag: '已接入', tail: '进入', url: '/pages/funds/index' },
-      { title: '收支明细', desc: '按基金维度查看收入、支出与余额情况。', tag: '已接入', tail: '查看', url: '/pages/funds/index' },
-    ],
+    id: '2025-q3',
+    year: '2025',
+    title: '福莲教育促进会 2025 年 1-9 月财务情况报告',
+    period: '2025 年前三季度',
+    url: `${reportBaseUrl}/fulian-finance-2025-q3.pdf`,
   },
   {
-    key: 'org',
-    title: '组织架构',
-    note: '治理结构展示',
-    kicker: '模块四',
-    index: '04',
-    summary: '用于展示机构治理结构、职责分工与协作关系，后续适合做成清晰的层级说明页面。',
-    featureTitle: '治理结构与职责分工',
-    featureDesc: '当前先保留结构位，后续可进一步接入组织架构图与岗位职责说明。',
-    actionText: '建设中',
-    pending: true,
-    items: [
-      { title: '治理层结构', desc: '展示理事、监事与执行层的基本结构。', tag: '预留', tail: '待上线' },
-      { title: '职责分工', desc: '说明主要职责分工与协作关系。', tag: '预留', tail: '待上线' },
-    ],
+    id: '2025-h1',
+    year: '2025',
+    title: '福莲教育促进会 2025 年 1-6 月财务情况报告',
+    period: '2025 年上半年',
+    url: `${reportBaseUrl}/fulian-finance-2025-h1.pdf`,
   },
   {
-    key: 'supervision',
-    title: '监察报告',
-    note: '监督与报告公开',
-    kicker: '模块五',
-    index: '05',
-    summary: '用于后续公开监督材料、监察说明与阶段报告，使机构治理信息更加完整。',
-    featureTitle: '监督与监察公开窗口',
-    featureDesc: '当前先保留结构位，后续可接入监察报告与监督摘要，形成长期公开页面。',
-    actionText: '建设中',
-    pending: true,
-    items: [
-      { title: '监察说明', desc: '介绍监督机制、范围与公开口径。', tag: '预留', tail: '待上线' },
-      { title: '阶段报告', desc: '用于发布监察报告与监督摘要。', tag: '预留', tail: '待上线' },
-    ],
+    id: '2025-q1',
+    year: '2025',
+    title: '福莲教育促进会 2025 年 1-3 月财务情况报告',
+    period: '2025 年第一季度',
+    url: `${reportBaseUrl}/fulian-finance-2025-q1.pdf`,
   },
-]
+  {
+    id: '2024-annual',
+    year: '2024',
+    title: '福莲教育促进会 2024 年 1-12 月财务情况报告',
+    period: '2024 年度',
+    url: `${reportBaseUrl}/fulian-finance-2024-annual.pdf`,
+  },
+  {
+    id: '2024-q3',
+    year: '2024',
+    title: '福莲教育促进会 2024 年 1-9 月财务情况报告',
+    period: '2024 年前三季度',
+    url: `${reportBaseUrl}/fulian-finance-2024-q3.pdf`,
+  },
+  {
+    id: '2024-h1',
+    year: '2024',
+    title: '福莲教育促进会 2024 年 1-6 月财务情况报告',
+    period: '2024 年上半年',
+    url: `${reportBaseUrl}/fulian-finance-2024-h1.pdf`,
+  },
+  {
+    id: '2024-q1',
+    year: '2024',
+    title: '福莲教育促进会 2024 年 1-3 月财务情况报告',
+    period: '2024 年第一季度',
+    url: `${reportBaseUrl}/fulian-finance-2024-q1.pdf`,
+  },
+  {
+    id: '2023-annual',
+    year: '2023',
+    title: '福莲教育促进会 2023 年 1-12 月财务情况报告',
+    period: '2023 年度',
+    url: `${reportBaseUrl}/fulian-finance-2023-annual.pdf`,
+  },
+  {
+    id: '2023-q3',
+    year: '2023',
+    title: '福莲教育促进会 2023 年 1-9 月财务情况报告',
+    period: '2023 年前三季度',
+    url: `${reportBaseUrl}/fulian-finance-2023-q3.pdf`,
+  },
+  {
+    id: '2023-h1',
+    year: '2023',
+    title: '福莲教育促进会 2023 年 1-6 月财务情况报告',
+    period: '2023 年上半年',
+    url: `${reportBaseUrl}/fulian-finance-2023-h1.pdf`,
+  },
+  {
+    id: '2023-q1',
+    year: '2023',
+    title: '福莲教育促进会 2023 年 1-3 月财务情况报告',
+    period: '2023 年第一季度',
+    url: `${reportBaseUrl}/fulian-finance-2023-q1.pdf`,
+  },
+  {
+    id: '2022-annual',
+    year: '2022',
+    title: '福莲教育促进会 2022 年 1-12 月财务情况报告',
+    period: '2022 年度',
+    url: `${reportBaseUrl}/fulian-finance-2022-annual.pdf`,
+  },
+  {
+    id: '2021-annual',
+    year: '2021',
+    title: '福莲教育促进会 2021 年 1-12 月财务情况报告',
+    period: '2021 年度',
+    url: `${reportBaseUrl}/fulian-finance-2021-annual.pdf`,
+  },
+  {
+    id: '2020-annual',
+    year: '2020',
+    title: '福莲教育促进会 2020 年 1-12 月财务情况报告',
+    period: '2020 年度',
+    url: `${reportBaseUrl}/fulian-finance-2020-annual.pdf`,
+  },
+])
 
-const activeSectionData = computed(() => sections.find((item) => item.key === activeSection.value) || sections[0])
-
-function openSection(section) {
-  if (section.pending) {
-    uni.showToast({ title: '该模块正在建设中', icon: 'none' })
+function openReport(report) {
+  if (!report.url) {
+    uni.showToast({ title: '报告文件待上传', icon: 'none' })
     return
   }
-  if (section.url) {
-    uni.navigateTo({ url: section.url })
-  }
+
+  // #ifdef H5
+  window.open(report.url, '_blank', 'noopener,noreferrer')
+  // #endif
+
+  // #ifndef H5
+  uni.showLoading({ title: '打开中...' })
+  uni.downloadFile({
+    url: report.url,
+    success: (res) => {
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        uni.showToast({ title: '报告下载失败', icon: 'none' })
+        return
+      }
+      uni.openDocument({
+        filePath: res.tempFilePath,
+        showMenu: true,
+        success: () => {},
+        fail: () => {
+          uni.showToast({ title: '当前文件暂无法浏览', icon: 'none' })
+        },
+      })
+    },
+    fail: () => {
+      uni.showToast({ title: '报告下载失败', icon: 'none' })
+    },
+    complete: () => {
+      uni.hideLoading()
+    },
+  })
+  // #endif
 }
 
-function openRow(item, section) {
-  if (item.url) {
-    uni.navigateTo({ url: item.url })
-    return
-  }
-  openSection(section)
-}
+onShow(() => {
+  loggedIn.value = isLoggedIn()
+})
 </script>
 
 <style scoped>
-.about-page {
-  padding: 0 0 60rpx;
-  background: #f7f9fc;
+.finance-tab-page {
+  min-height: 100vh;
+  padding-bottom: 56rpx;
+  background:
+    linear-gradient(180deg, rgba(243, 247, 252, 0.96) 0%, rgba(250, 252, 255, 0.98) 42%, #ffffff 100%),
+    radial-gradient(circle at 88% 8%, rgba(72, 82, 145, 0.12), transparent 34%);
 }
 
-.about-hero {
-  position: relative;
-  min-height: 420rpx;
-  overflow: hidden;
+.finance-hero {
+  padding: 56rpx 34rpx 42rpx;
 }
 
-.about-hero-image,
-.about-hero-overlay {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.about-hero-overlay {
-  background: linear-gradient(180deg, rgba(17, 22, 28, 0.34) 0%, rgba(17, 22, 28, 0.6) 100%);
-}
-
-.about-hero-inner {
-  position: relative;
-  z-index: 2;
-  width: calc(100% - 72rpx);
-  margin: 0 auto;
-  padding-top: 182rpx;
-}
-
-.about-hero-kicker {
-  color: rgba(232, 237, 248, 0.84);
-  font-size: 22rpx;
-  letter-spacing: 2rpx;
-}
-
-.about-hero-title {
-  margin-top: 14rpx;
-  color: #f7f9fc;
-  font-size: 62rpx;
+.hero-mark {
+  color: #6d7890;
+  font-size: 20rpx;
   font-weight: 700;
+  letter-spacing: 4rpx;
 }
 
-.about-hero-desc {
-  max-width: 620rpx;
-  margin-top: 16rpx;
-  color: rgba(237, 242, 251, 0.9);
-  font-size: 25rpx;
-  line-height: 1.88;
+.finance-title {
+  margin-top: 18rpx;
+  color: #172233;
+  font-size: 64rpx;
+  font-weight: 800;
+  line-height: 1.08;
 }
 
-.about-layout {
-  display: grid;
-  grid-template-columns: 240rpx minmax(0, 1fr);
-  background: #fbfcff;
-  border-top: 1rpx solid rgba(214, 224, 238, 0.5);
-  border-bottom: 1rpx solid rgba(214, 224, 238, 0.4);
+.finance-state {
+  margin: 0 34rpx;
+  padding: 34rpx 0;
+  border-top: 1rpx solid rgba(210, 220, 234, 0.9);
 }
 
-.about-nav {
-  padding: 20rpx 0;
-  background: #f2f6fb;
-  border-right: 1rpx solid rgba(214, 224, 238, 0.56);
-}
-
-.about-nav-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12rpx;
-  min-height: 110rpx;
-  padding: 0 20rpx 0 26rpx;
-  border-left: 6rpx solid transparent;
-}
-
-.about-nav-item + .about-nav-item {
-  border-top: 1rpx solid rgba(223, 231, 242, 0.82);
-}
-
-.about-nav-item-active {
-  background: #ffffff;
-  border-left-color: #5a67aa;
-}
-
-.about-nav-title {
-  color: #1b2536;
-  font-size: 28rpx;
-  font-weight: 700;
-}
-
-.about-nav-note {
-  margin-top: 8rpx;
-  color: #8390a4;
-  font-size: 21rpx;
-}
-
-.about-nav-arrow {
-  color: #7a87bb;
-  font-size: 24rpx;
-}
-
-.about-main {
-  padding: 36rpx 30rpx 44rpx;
-  background: #ffffff;
-}
-
-.about-section-head {
-  padding-bottom: 24rpx;
-  border-bottom: 1rpx solid rgba(228, 235, 244, 0.96);
-}
-
-.about-section-title {
-  margin-top: 10rpx;
-  color: #1b2536;
-  font-size: 50rpx;
-  font-weight: 700;
-}
-
-.about-section-summary,
-.about-feature-desc {
-  margin-top: 16rpx;
-  color: #68778f;
-  font-size: 25rpx;
-  line-height: 1.88;
-}
-
-.about-feature-band {
-  display: grid;
-  grid-template-columns: 108rpx minmax(0, 1fr) 168rpx;
-  gap: 22rpx;
-  align-items: center;
-  padding: 30rpx 0;
-  border-bottom: 1rpx solid rgba(228, 235, 244, 0.96);
-}
-
-.about-feature-index {
-  color: #5a67aa;
-  font-size: 52rpx;
-  font-weight: 700;
-}
-
-.about-feature-title {
-  color: #1b2536;
+.state-title {
+  color: #172233;
   font-size: 34rpx;
   font-weight: 700;
 }
 
-.about-feature-action {
-  min-height: 76rpx;
-  padding: 0 16rpx;
-  border: 1rpx solid rgba(90, 103, 170, 0.34);
-  color: #485291;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24rpx;
-  font-weight: 600;
+.state-desc {
+  margin-top: 14rpx;
+  color: #6f7f96;
+  font-size: 26rpx;
+  line-height: 1.72;
 }
 
-.about-feature-action-disabled {
-  opacity: 0.62;
+.state-action {
+  margin-top: 24rpx;
 }
 
-.about-detail-row {
+.archive-strip {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96rpx;
-  gap: 20rpx;
+  grid-template-columns: 1fr 1rpx 1fr;
   align-items: center;
-  min-height: 138rpx;
-  border-bottom: 1rpx solid rgba(229, 236, 245, 0.96);
+  margin: 0 34rpx 34rpx;
+  padding: 26rpx 0;
+  border-top: 1rpx solid rgba(200, 210, 225, 0.92);
+  border-bottom: 1rpx solid rgba(200, 210, 225, 0.92);
 }
 
-.about-detail-tail {
-  color: #5a67aa;
+.archive-item {
+  min-width: 0;
+}
+
+.archive-divider {
+  width: 1rpx;
+  height: 58rpx;
+  background: rgba(195, 164, 112, 0.55);
+}
+
+.archive-number {
+  color: #485291;
+  font-size: 42rpx;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.archive-label {
+  margin-top: 8rpx;
+  color: #77869a;
   font-size: 23rpx;
-  text-align: right;
 }
 
-.about-inline-tag {
-  color: #5a67aa;
-  font-size: 21rpx;
-  font-weight: 600;
+.report-section {
+  margin: 0 34rpx;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-bottom: 18rpx;
+}
+
+.section-title {
+  color: #172233;
+  font-size: 36rpx;
+  font-weight: 800;
+}
+
+.section-line {
+  width: 72rpx;
+  height: 4rpx;
+  margin-top: 14rpx;
+  background: linear-gradient(90deg, #485291, #bfa176);
+}
+
+.section-note {
+  color: #8b97a8;
+  font-size: 22rpx;
+}
+
+.report-list {
+  border-top: 1rpx solid rgba(218, 226, 238, 0.95);
+}
+
+.report-row {
+  display: grid;
+  grid-template-columns: 112rpx minmax(0, 1fr) 110rpx;
+  align-items: center;
+  gap: 20rpx;
+  min-height: 150rpx;
+  border-bottom: 1rpx solid rgba(218, 226, 238, 0.95);
+}
+
+.report-row.disabled {
+  opacity: 0.68;
+}
+
+.report-year {
+  color: #b09362;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 42rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.report-main {
+  min-width: 0;
+}
+
+.report-title {
+  color: #1b2536;
+  font-size: 29rpx;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.report-meta {
+  margin-top: 10rpx;
+  color: #7c8a9e;
+  font-size: 23rpx;
+}
+
+.report-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12rpx;
+}
+
+.action-text,
+.pending-text {
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.action-text {
+  color: #485291;
+}
+
+.pending-text {
+  color: #9aa6b6;
+}
+
+.arrow-line {
+  width: 54rpx;
+  height: 1rpx;
+  background: linear-gradient(90deg, transparent, #bfa176);
 }
 </style>

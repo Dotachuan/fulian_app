@@ -1,9 +1,6 @@
 <template>
   <view class="page home-page">
-    <view class="hero-stage">
-      <image class="hero-image" :src="heroImage" mode="aspectFill" />
-      <view class="hero-overlay"></view>
-
+    <view class="brand-stage">
       <view class="hero-topbar">
         <view class="brand-block">
           <image class="brand-mark" :src="foundationLogo" mode="aspectFit" />
@@ -12,306 +9,77 @@
             <view class="brand-sub">Fulian Education Foundation</view>
           </view>
         </view>
+
+        <button class="share-button" open-type="share">分享</button>
       </view>
 
-      <view class="hero-copy">
-        <view class="hero-kicker">教育发展 · 公益透明</view>
-        <view class="hero-heading">花开福莲,香逸四海</view>
-        <view class="hero-summary">
-          您的福业，福莲的未来。
-          <text class="hero-summary-break">福莲欢迎、并期待着您的加入！</text>
-        </view>
-      </view>
-    </view>
-
-    <view class="anchor-bar">
-      <view
-        v-for="item in sectionAnchors"
-        :key="item.id"
-        class="anchor-item"
-        @click="jumpTo(item.id)"
-      >
-        {{ item.label }}
-      </view>
     </view>
 
     <view class="home-content">
-      <view id="intro" class="section-band intro-band">
-        <view class="section-head">
-          <view>
-            <view class="section-title home-title">关于福莲</view>
-          </view>
-        </view>
+      <view class="home-reader">
+        <view class="home-reader-title">福莲教育是一个怎么样的公益组织</view>
 
-        <view class="intro-layout">
-          <view class="intro-main">
-            <view class="intro-title">{{ aboutTitle }}</view>
-            <view class="intro-text">{{ aboutSummary }}</view>
-            <view class="intro-actions">
-            </view>
-          </view>
-
-          <view class="intro-side">
-            <view class="side-block">
-              <view class="side-title">{{ missionTitle }}</view>
-              <view class="side-text">{{ missionSummary }}</view>
-            </view>
-            <view class="side-divider"></view>
-            <view class="side-block">
-              <view class="side-title">{{ visionTitle }}</view>
-              <view class="side-text">{{ visionSummary }}</view>
-            </view>
-          </view>
-        </view>
-      </view>
-
-      <view id="news" class="section-band news-band">
-        <view class="section-head">
-          <view>
-            <view class="section-title home-title">新闻动态</view>
-          </view>
-          <text class="link-text" @click="openNewsList">全部新闻</text>
-        </view>
-
-        <view v-if="newsFeatureItems.length" class="news-layout">
-          <view
-            v-for="(item, index) in newsFeatureItems"
-            :key="item.id"
-            class="news-panel"
-            :class="{ 'news-panel-accent': index === 1 }"
-            @click="openNews(item)"
-          >
+        <view class="home-ppt-flow">
+          <view v-for="(slide, index) in homePptSlides" :key="slide.no" class="home-ppt-page">
             <image
-              v-if="item.cover_url"
-              class="news-panel-image"
-              :src="item.cover_url"
-              mode="aspectFill"
+              v-if="!failedHomeSlides[slide.no]"
+              class="home-ppt-image"
+              :src="slide.url"
+              mode="widthFix"
+              lazy-load
+              show-menu-by-longpress
+              @click="previewHomeSlide(index)"
+              @error="markHomeSlideFailed(slide.no)"
             />
-            <view v-else class="news-panel-image news-panel-fallback"></view>
-            <view class="news-panel-overlay"></view>
-            <view class="news-panel-content">
-              <view class="news-date">{{ formatDate(item.published_at) }}</view>
-              <view class="news-title">{{ item.title }}</view>
-              <view class="news-summary">{{ item.summary || '点击查看完整内容。' }}</view>
-              <view class="news-arrow">→</view>
-            </view>
+            <view v-else class="home-ppt-error">该页图片暂未加载</view>
           </view>
-        </view>
-        <view v-else class="empty-state">暂未获取到新闻内容</view>
-      </view>
-
-      <view id="activities" class="section-band activity-band">
-        <view class="section-head">
-          <view>
-            <view class="section-title home-title">近期活动</view>
-          </view>
-        </view>
-
-        <view class="activity-tabs">
-          <view
-            v-for="(item, index) in activityItems"
-            :key="`${item.title}-${index}`"
-            class="activity-tab"
-            :class="{ 'activity-tab-active': index === activeActivityIndex }"
-            @click="activeActivityIndex = index"
-          >
-            {{ item.tag }}
-          </view>
-        </view>
-
-        <view class="activity-stage">
-          <view class="activity-ghost"></view>
-          <view class="activity-focus">
-            <image
-              v-if="currentActivity.image"
-              class="activity-image"
-              :src="currentActivity.image"
-              mode="aspectFill"
-            />
-            <view v-else class="activity-image activity-image-fallback"></view>
-            <view class="activity-overlay"></view>
-            <view class="activity-copy">
-              <view class="activity-tagline">{{ currentActivity.tag }}</view>
-              <view class="activity-title">{{ currentActivity.title }}</view>
-              <view class="activity-desc">{{ currentActivity.desc }}</view>
-              <view class="button-secondary activity-btn" @click="openActivityTarget(currentActivity)">
-                {{ currentActivity.actionText }}
-              </view>
-            </view>
-          </view>
-          <view class="activity-ghost"></view>
         </view>
       </view>
 
-      <view id="notices" class="section-band notice-band">
-        <view class="section-head">
-          <view>
-            <view class="section-title home-title">公告与提醒</view>
-          </view>
-          <text class="link-text" @click="openNoticeList">全部公告</text>
-        </view>
-
-        <view v-if="noticeItems.length" class="notice-flow">
-          <view
-            v-for="item in noticeItems"
-            :key="item.id"
-            class="notice-row"
-            @click="openNotice(item.id)"
-          >
-            <view class="notice-line"></view>
-            <view class="notice-content">
-              <view class="row-between">
-                <view class="list-title">{{ item.title }}</view>
-                <text v-if="item.is_pinned" class="badge badge-warning">置顶</text>
-              </view>
-              <view class="list-desc">{{ item.summary || '点击查看公告详情。' }}</view>
-              <view class="list-meta">{{ formatDate(item.published_at) }}</view>
-            </view>
-          </view>
-        </view>
-        <view v-else class="empty-state">暂未获取到公告内容</view>
-      </view>
     </view>
   </view>
 </template>
 
+<script>
+export default {
+  onShareAppMessage() {
+    return {
+      title: '福莲教育促进会',
+      path: '/pages/home/index',
+    }
+  },
+}
+</script>
+
 <script setup>
-import { computed, ref } from 'vue'
-import { getPublicNews, getPublicNotices, getPublicSiteContent } from '../../api/public'
-import { openExternalLink } from '../../utils/external-link'
+import { ref } from 'vue'
+import { getFulianPptImagePath } from '../../utils/fulian-ppt'
 import { normalizeMediaUrl } from '../../utils/media'
-import heroImage from '../../static/home-hero-lotus.jpg'
 import foundationLogo from '../../static/foundation-logo.jpg'
 
-const newsItems = ref([])
-const noticeItems = ref([])
-const siteContents = ref([])
-const activeActivityIndex = ref(0)
-
-const sectionAnchors = [
-  { id: 'intro', label: '简介' },
-  { id: 'news', label: '新闻' },
-  { id: 'activities', label: '活动' },
-  { id: 'notices', label: '公告' },
-]
-
-
-const aboutItem = computed(() => siteContents.value.find((item) => item.key === 'about') || {})
-const missionItem = computed(() => siteContents.value.find((item) => item.key === 'mission') || {})
-const visionItem = computed(() => siteContents.value.find((item) => item.key === 'vision') || {})
-
-const aboutTitle = computed(() => aboutItem.value.title || '机构简介')
-const aboutSummary = computed(
-  () =>
-    aboutItem.value.summary ||
-    aboutItem.value.content ||
-    '福莲教育促进会持续围绕教育公益、校友协作与长期资助展开服务与行动。'
-)
-const missionTitle = computed(() => missionItem.value.title || '使命')
-const missionSummary = computed(
-  () => missionItem.value.summary || missionItem.value.content || '以长期行动支持教育发展。'
-)
-const visionTitle = computed(() => visionItem.value.title || '愿景')
-const visionSummary = computed(
-  () => visionItem.value.summary || visionItem.value.content || '连接更多力量，形成可持续的公益支持。'
-)
-
-const newsFeatureItems = computed(() =>
-  newsItems.value.slice(0, 2).map((item) => ({
-    ...item,
-    cover_url: normalizeMediaUrl(item.cover_url),
-  }))
-)
-const activityItems = computed(() => {
-  const derived = newsItems.value.slice(0, 3).map((item, index) => ({
-    tag: ['近期活动', '项目走访', '会员交流'][index] || '福莲活动',
-    title: item.title,
-    desc: item.summary || '围绕福莲教育公益与会员服务的近期活动内容。',
-    image: normalizeMediaUrl(item.cover_url) || heroImage,
-    type: 'news',
-    targetUrl: item.source_url,
-    targetTitle: item.title,
-    actionText: '查看详情',
-  }))
-
-  if (derived.length) return derived
-
-  return [
-    {
-      tag: '近期活动',
-      title: '活动内容筹备中',
-      desc: '当前版本先预留活动展示位，后续接入独立活动数据后可直接切换为真实内容。',
-      image: heroImage,
-      type: 'placeholder',
-      actionText: '查看公告',
-    },
-  ]
+const failedHomeSlides = ref({})
+const homePptSlides = Array.from({ length: 39 }, (_, index) => {
+  const no = index + 1
+  return {
+    no,
+    url: normalizeMediaUrl(getFulianPptImagePath(no)),
+  }
 })
 
-const currentActivity = computed(
-  () => activityItems.value[activeActivityIndex.value] || activityItems.value[0] || {}
-)
-
-function formatDate(value) {
-  if (!value) return '近期更新'
-  return String(value)
-}
-
-async function loadData() {
-  try {
-    const [newsRes, noticeRes, siteRes] = await Promise.all([
-      getPublicNews({ page: 1, page_size: 6, featured_only: false }),
-      getPublicNotices({ page: 1, page_size: 4 }),
-      getPublicSiteContent(),
-    ])
-    newsItems.value = newsRes.items || []
-    noticeItems.value = noticeRes.items || []
-    siteContents.value = siteRes || []
-    activeActivityIndex.value = 0
-  } catch (error) {
-    newsItems.value = []
-    noticeItems.value = []
-    siteContents.value = []
-    activeActivityIndex.value = 0
-  }
-}
-
-function jumpTo(id) {
-  uni.pageScrollTo({
-    selector: `#${id}`,
-    duration: 240,
+function previewHomeSlide(index) {
+  uni.previewImage({
+    current: homePptSlides[index].url,
+    urls: homePptSlides.map((slide) => slide.url),
   })
 }
 
-function goAbout() {
-  uni.switchTab({ url: '/pages/about/index' })
-}
-
-function openNews(item) {
-  openExternalLink(item?.source_url, item?.title || '公众号推文')
-}
-
-function openNewsList() {
-  uni.navigateTo({ url: '/pages/news/index' })
-}
-
-function openActivityTarget(item) {
-  if (item.type === 'news' && item.targetUrl) {
-    openExternalLink(item.targetUrl, item.targetTitle || '公众号推文')
-    return
+function markHomeSlideFailed(slideNo) {
+  failedHomeSlides.value = {
+    ...failedHomeSlides.value,
+    [slideNo]: true,
   }
-  openNoticeList()
 }
 
-function openNotice(id) {
-  uni.navigateTo({ url: `/pages/notice-detail/index?id=${id}` })
-}
-
-function openNoticeList() {
-  uni.navigateTo({ url: '/pages/notices/index' })
-}
-
-loadData().catch(() => {})
 </script>
 
 <style scoped>
@@ -320,30 +88,12 @@ loadData().catch(() => {})
   background: linear-gradient(180deg, #f6f8fc 0%, #f9fbfe 100%);
 }
 
-.hero-stage {
-  position: relative;
-  min-height: 860rpx;
-  overflow: hidden;
+.brand-stage {
+  background: #ffffff;
+  border-bottom: 1rpx solid rgba(215, 224, 236, 0.9);
 }
 
-.hero-image,
-.hero-overlay {
-  position: absolute;
-  inset: 0;
-}
-
-.hero-image {
-  width: 100%;
-  height: 100%;
-}
-
-.hero-overlay {
-  background:
-    linear-gradient(180deg, rgba(11, 21, 29, 0.1) 0%, rgba(11, 21, 29, 0.34) 40%, rgba(11, 21, 29, 0.76) 100%);
-}
-
-.hero-topbar,
-.hero-copy {
+.hero-topbar {
   position: relative;
   z-index: 2;
   width: calc(100% - 56rpx);
@@ -355,17 +105,14 @@ loadData().catch(() => {})
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
-  padding-top: 38rpx;
+  padding: 28rpx 0 26rpx;
 }
 
 .brand-block {
   display: flex;
   align-items: center;
   gap: 14rpx;
-  padding: 14rpx 18rpx;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(18rpx);
-  border-radius: 18rpx;
+  padding: 0;
 }
 
 .brand-mark {
@@ -390,6 +137,24 @@ loadData().catch(() => {})
   font-size: 19rpx;
 }
 
+.share-button {
+  margin: 0;
+  min-width: 112rpx;
+  height: 64rpx;
+  padding: 0 22rpx;
+  border: 0;
+  border-radius: 999rpx;
+  background: #f1f4fa;
+  color: #485291;
+  font-size: 23rpx;
+  font-weight: 700;
+  line-height: 64rpx;
+}
+
+.share-button::after {
+  border: 0;
+}
+
 .hero-entry {
   min-width: 162rpx;
   min-height: 68rpx;
@@ -403,38 +168,6 @@ loadData().catch(() => {})
   justify-content: center;
   font-size: 23rpx;
   font-weight: 600;
-}
-
-.hero-copy {
-  padding-top: 246rpx;
-}
-
-.hero-kicker {
-  color: rgba(232, 237, 248, 0.86);
-  font-size: 22rpx;
-  font-weight: 600;
-  letter-spacing: 2rpx;
-}
-
-.hero-heading {
-  max-width: 580rpx;
-  margin-top: 18rpx;
-  color: #f7f9fc;
-  font-size: 60rpx;
-  font-weight: 700;
-  line-height: 1.12;
-}
-
-.hero-summary {
-  max-width: 590rpx;
-  margin-top: 18rpx;
-  color: rgba(237, 242, 251, 0.9);
-  font-size: 26rpx;
-  line-height: 1.84;
-}
-
-.hero-summary-break {
-  display: block;
 }
 
 .anchor-bar {
@@ -466,7 +199,47 @@ loadData().catch(() => {})
 }
 
 .home-content {
-  padding: 34rpx 0 0;
+  padding: 0;
+}
+
+.home-reader {
+  padding: 30rpx 28rpx 48rpx;
+}
+
+.home-reader-title {
+  padding: 8rpx 12rpx 30rpx;
+  color: #111827;
+  font-size: 46rpx;
+  font-weight: 800;
+  line-height: 1.36;
+  text-align: center;
+}
+
+.home-ppt-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.home-ppt-page {
+  overflow: hidden;
+  width: 100%;
+  background: #eef3f8;
+}
+
+.home-ppt-image {
+  display: block;
+  width: 100%;
+}
+
+.home-ppt-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 360rpx;
+  background: #f3f6fa;
+  color: #7c899c;
+  font-size: 24rpx;
 }
 
 .section-band {
@@ -496,22 +269,43 @@ loadData().catch(() => {})
 }
 
 .intro-band {
+  padding-top: 24rpx;
+  padding-bottom: 20rpx;
   background: linear-gradient(180deg, #fbfcff 0%, #f2f6fb 100%);
 }
 
 .intro-layout {
-  display: grid;
-  grid-template-columns: 1.24fr 0.76fr;
-  gap: 30rpx;
-  align-items: start;
+  position: relative;
+  overflow: hidden;
+  padding: 32rpx 30rpx;
+  border-radius: 8rpx;
+  background: #eef2f0;
+  box-shadow: 0 18rpx 42rpx rgba(29, 45, 68, 0.06);
+}
+
+.intro-background,
+.intro-background-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.intro-background-overlay {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(255, 255, 255, 0.82) 58%,
+    rgba(255, 255, 255, 0.7) 100%
+  );
 }
 
 .intro-main {
-  padding: 12rpx 0 0;
+  position: relative;
+  z-index: 2;
 }
 
 .intro-title {
-  max-width: 470rpx;
   color: #1b2536;
   font-size: 50rpx;
   font-weight: 700;
@@ -519,59 +313,48 @@ loadData().catch(() => {})
 }
 
 .intro-text {
-  max-width: 520rpx;
   margin-top: 20rpx;
   color: #667791;
   font-size: 27rpx;
   line-height: 1.92;
 }
 
-.intro-actions {
-  display: flex;
-  gap: 14rpx;
-  max-width: 420rpx;
-  margin-top: 30rpx;
+.ppt-band {
+  padding-top: 20rpx;
+  background: #ffffff;
 }
 
-.intro-btn {
-  flex: 1;
+.ppt-grid-head {
+  margin-bottom: 26rpx;
 }
 
-.intro-side {
-  padding: 10rpx 0 0 24rpx;
-  border-left: 2rpx solid rgba(72, 82, 145, 0.18);
+.ppt-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18rpx;
 }
 
-.side-block + .side-block {
-  margin-top: 26rpx;
+.ppt-grid-card {
+  position: relative;
+  height: 184rpx;
+  overflow: hidden;
+  border: 1rpx solid rgba(215, 224, 236, 0.95);
+  border-radius: 8rpx;
+  background: #ffffff;
+  box-shadow: 0 18rpx 42rpx rgba(29, 45, 68, 0.06);
 }
 
-.side-divider {
+.ppt-card-media {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.ppt-card-cover {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: 1rpx;
-  margin-top: 24rpx;
-  background: rgba(215, 224, 236, 0.9);
-}
-
-.side-kicker {
-  color: #5a67aa;
-  font-size: 21rpx;
-  font-weight: 700;
-  letter-spacing: 1.5rpx;
-}
-
-.side-title {
-  margin-top: 14rpx;
-  color: #1b2536;
-  font-size: 32rpx;
-  font-weight: 700;
-}
-
-.side-text {
-  margin-top: 10rpx;
-  color: #6f7f98;
-  font-size: 24rpx;
-  line-height: 1.84;
+  height: 100%;
 }
 
 .news-band {
@@ -609,7 +392,7 @@ loadData().catch(() => {})
 }
 
 .news-panel-overlay {
-  background: linear-gradient(180deg, rgba(10, 21, 28, 0.1) 0%, rgba(10, 21, 28, 0.8) 100%);
+  background: linear-gradient(180deg, rgba(10, 21, 28, 0.04) 0%, rgba(10, 21, 28, 0.64) 100%);
 }
 
 .news-panel-content {
@@ -628,24 +411,32 @@ loadData().catch(() => {})
 }
 
 .news-title {
-  margin-top: 12rpx;
+  margin-top: 10rpx;
   color: #f7f9fc;
-  font-size: 34rpx;
+  font-size: 27rpx;
   font-weight: 700;
-  line-height: 1.34;
+  line-height: 1.42;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .news-summary {
-  margin-top: 12rpx;
-  color: rgba(236, 241, 250, 0.88);
-  font-size: 23rpx;
-  line-height: 1.72;
+  margin-top: 8rpx;
+  color: rgba(236, 241, 250, 0.78);
+  font-size: 20rpx;
+  line-height: 1.58;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .news-arrow {
   width: 72rpx;
   height: 72rpx;
-  margin-top: 22rpx;
+  margin-top: 16rpx;
   border-radius: 999rpx;
   background: rgba(255, 255, 255, 0.92);
   color: #485291;
@@ -718,40 +509,31 @@ loadData().catch(() => {})
 .activity-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(11, 24, 31, 0.72) 0%, rgba(11, 24, 31, 0.16) 66%, rgba(11, 24, 31, 0.06) 100%);
+  background: linear-gradient(180deg, rgba(11, 24, 31, 0.04) 0%, rgba(11, 24, 31, 0.12) 44%, rgba(11, 24, 31, 0.62) 100%);
 }
 
 .activity-copy {
-  position: relative;
+  position: absolute;
+  left: 34rpx;
+  bottom: 34rpx;
   z-index: 2;
-  max-width: 380rpx;
-  padding: 42rpx 38rpx;
+  max-width: 340rpx;
   color: #f7f9fc;
 }
 
-.activity-tagline {
-  color: rgba(233, 238, 248, 0.84);
-  font-size: 21rpx;
-  font-weight: 700;
-}
-
 .activity-title {
-  margin-top: 14rpx;
-  font-size: 48rpx;
+  font-size: 29rpx;
   font-weight: 700;
-  line-height: 1.16;
-}
-
-.activity-desc {
-  margin-top: 16rpx;
-  color: rgba(236, 241, 250, 0.88);
-  font-size: 24rpx;
-  line-height: 1.84;
+  line-height: 1.38;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
 }
 
 .activity-btn {
-  width: 188rpx;
-  margin-top: 24rpx;
+  width: 168rpx;
+  margin-top: 18rpx;
   background: rgba(255, 255, 255, 0.95);
   color: #485291;
 }

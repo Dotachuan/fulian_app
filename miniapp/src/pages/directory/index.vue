@@ -1,13 +1,12 @@
 <template>
   <view class="page directory-page">
     <view class="directory-header">
-      <view class="directory-title">会员通讯录</view>
-      <view class="directory-subtitle">仅展示姓名、工作单位、常驻地与会员身份，不公开电话等隐私字段。</view>
+      <view class="directory-title">通讯录</view>
     </view>
 
     <view v-if="!loggedIn" class="directory-state">
       <view class="directory-state-title">请先登录</view>
-      <view class="directory-state-desc">登录后可按姓名或常驻地查询会员基础公开信息。</view>
+      <view class="directory-state-desc">登录后可按姓名或常驻地查询通讯录信息。</view>
       <view class="button-primary directory-state-action" @click="goLogin">去登录</view>
     </view>
 
@@ -49,7 +48,7 @@
         <view class="directory-groups">
           <view
             v-for="group in groupedItems"
-            :id="`group-${group.label}`"
+            :id="getGroupDomId(group.label)"
             :key="group.label"
             class="directory-group"
           >
@@ -73,7 +72,7 @@
 
               <view class="directory-copy">
                 <view class="row-between">
-                  <view class="directory-name">{{ item.name || '未命名会员' }}</view>
+                  <view class="directory-name">{{ item.name || '未命名成员' }}</view>
                   <text class="badge" :class="levelBadgeClass(item.member_level)">{{ item.member_level_label }}</text>
                 </view>
                 <view class="directory-unit">{{ item.work_unit || '未填写工作单位' }}</view>
@@ -97,7 +96,7 @@
         </view>
       </view>
 
-      <view v-else-if="!loading" class="directory-empty">暂无匹配会员</view>
+      <view v-else-if="!loading" class="directory-empty">暂无匹配成员</view>
 
       <view v-if="detailVisible && activeMember" class="directory-detail-mask" @click="closeDetail">
         <view class="directory-detail" @click.stop>
@@ -113,9 +112,11 @@
               <template v-else>{{ getAvatarText(activeMember.name) }}</template>
             </view>
             <view class="directory-detail-main">
-              <view class="directory-detail-name">{{ activeMember.name || '未命名会员' }}</view>
+              <view class="directory-detail-name">{{ activeMember.name || '未命名成员' }}</view>
               <view class="directory-detail-meta">
-                <text class="badge" :class="levelBadgeClass(activeMember.member_level)">{{ activeMember.member_level_label }}</text>
+                <text class="badge" :class="levelBadgeClass(activeMember.member_level)">
+                  {{ activeMember.member_level_label }}
+                </text>
               </view>
               <view class="directory-detail-unit">{{ activeMember.work_unit || '未填写工作单位' }}</view>
             </view>
@@ -130,13 +131,9 @@
               <view class="directory-detail-label">常驻地</view>
               <view class="directory-detail-value">{{ activeMember.resident_city || '未填写常驻地' }}</view>
             </view>
-            <view class="directory-detail-row">
-              <view class="directory-detail-label">公开范围</view>
-              <view class="directory-detail-value">仅展示姓名、工作单位和常驻地</view>
-            </view>
           </view>
 
-          <view class="directory-detail-note">当前版本通讯录仅开放基础公开信息，电话号码不会在此页显示。</view>
+          <view class="directory-detail-note">电话号码不会在通讯录中展示。</view>
           <view class="directory-detail-actions">
             <view class="button-secondary detail-button" @click="closeDetail">关闭</view>
           </view>
@@ -166,11 +163,37 @@ const searchTabs = [
   { key: 'resident_city', label: '按常驻地查询' },
 ]
 
+const PINYIN_INITIALS = {
+  阿: 'A', 安: 'A', 敖: 'A',
+  白: 'B', 包: 'B', 鲍: 'B', 毕: 'B', 卞: 'B', 薄: 'B',
+  蔡: 'C', 曹: 'C', 岑: 'C', 常: 'C', 陈: 'C', 成: 'C', 程: 'C', 池: 'C', 褚: 'C', 崔: 'C',
+  戴: 'D', 邓: 'D', 丁: 'D', 董: 'D', 杜: 'D', 段: 'D',
+  鄂: 'E',
+  范: 'F', 方: 'F', 费: 'F', 冯: 'F', 傅: 'F',
+  甘: 'G', 高: 'G', 葛: 'G', 龚: 'G', 古: 'G', 顾: 'G', 郭: 'G',
+  韩: 'H', 何: 'H', 贺: 'H', 洪: 'H', 侯: 'H', 胡: 'H', 华: 'H', 黄: 'H', 霍: 'H',
+  纪: 'J', 贾: 'J', 简: 'J', 江: 'J', 蒋: 'J', 金: 'J', 景: 'J',
+  康: 'K', 柯: 'K', 孔: 'K', 邝: 'K',
+  赖: 'L', 蓝: 'L', 雷: 'L', 黎: 'L', 李: 'L', 连: 'L', 廖: 'L', 林: 'L', 凌: 'L', 刘: 'L', 柳: 'L', 卢: 'L', 陆: 'L', 罗: 'L', 吕: 'L',
+  马: 'M', 毛: 'M', 梅: 'M', 孟: 'M', 莫: 'M',
+  倪: 'N', 宁: 'N', 牛: 'N',
+  潘: 'P', 彭: 'P', 皮: 'P',
+  齐: 'Q', 钱: 'Q', 强: 'Q', 秦: 'Q', 丘: 'Q', 邱: 'Q',
+  任: 'R', 饶: 'R',
+  邵: 'S', 沈: 'S', 盛: 'S', 施: 'S', 石: 'S', 史: 'S', 宋: 'S', 苏: 'S', 孙: 'S',
+  谭: 'T', 唐: 'T', 田: 'T', 童: 'T', 涂: 'T',
+  万: 'W', 汪: 'W', 王: 'W', 魏: 'W', 温: 'W', 文: 'W', 翁: 'W', 吴: 'W', 伍: 'W',
+  夏: 'X', 萧: 'X', 肖: 'X', 谢: 'X', 徐: 'X', 许: 'X', 薛: 'X',
+  严: 'Y', 颜: 'Y', 杨: 'Y', 姚: 'Y', 叶: 'Y', 易: 'Y', 尹: 'Y', 余: 'Y', 于: 'Y', 俞: 'Y', 袁: 'Y',
+  曾: 'Z', 詹: 'Z', 张: 'Z', 章: 'Z', 赵: 'Z', 郑: 'Z', 钟: 'Z', 周: 'Z', 朱: 'Z', 庄: 'Z', 邹: 'Z',
+  北: 'B', 成: 'C', 福: 'F', 广: 'G', 杭: 'H', 连: 'L', 南: 'N', 上: 'S', 深: 'S', 苏: 'S', 厦: 'X'
+}
+
 const normalizedItems = computed(() => {
   const list = [...items.value]
   return list.sort((a, b) => {
-    const keyA = activeTab.value === 'resident_city' ? (a.resident_city || a.name || '') : (a.name || '')
-    const keyB = activeTab.value === 'resident_city' ? (b.resident_city || b.name || '') : (b.name || '')
+    const keyA = getSortKey(getGroupSource(a))
+    const keyB = getSortKey(getGroupSource(b))
     return keyA.localeCompare(keyB, 'zh-Hans-CN')
   })
 })
@@ -192,15 +215,31 @@ const groupedItems = computed(() => {
 function levelBadgeClass(level) {
   return {
     director: 'badge-primary',
-    member: 'badge-info',
+    member: 'badge-member',
     non_member: 'badge-muted',
   }[level || 'non_member']
 }
 
 function getGroupLabel(item) {
-  const source = activeTab.value === 'resident_city' ? item.resident_city || item.name || '' : item.name || ''
-  if (!source) return '#'
-  return source.trim().slice(0, 1).toUpperCase()
+  return getPinyinInitial(getGroupSource(item))
+}
+
+function getGroupSource(item) {
+  return activeTab.value === 'resident_city' ? item.resident_city || item.name || '' : item.name || ''
+}
+
+function getSortKey(source) {
+  const initial = getPinyinInitial(source)
+  const prefix = initial === '#' ? 'ZZ' : initial
+  return `${prefix}-${String(source || '').trim()}`
+}
+
+function getPinyinInitial(source) {
+  const first = String(source || '').trim().slice(0, 1)
+  if (!first) return '#'
+  if (/^[a-zA-Z]$/.test(first)) return first.toUpperCase()
+  if (/^[0-9]$/.test(first)) return '#'
+  return PINYIN_INITIALS[first] || '#'
 }
 
 function getAvatarText(name) {
@@ -237,9 +276,13 @@ function switchTab(key) {
 
 function jumpToGroup(label) {
   uni.pageScrollTo({
-    selector: `#group-${label}`,
+    selector: `#${getGroupDomId(label)}`,
     duration: 180,
   })
+}
+
+function getGroupDomId(label) {
+  return `group-${label === '#' ? 'other' : label}`
 }
 
 function openDetail(item) {
@@ -273,7 +316,6 @@ onShow(() => {
   font-weight: 700;
 }
 
-.directory-subtitle,
 .directory-state-desc,
 .directory-count,
 .directory-loading,
@@ -282,10 +324,6 @@ onShow(() => {
   color: #7a89a0;
   font-size: 24rpx;
   line-height: 1.74;
-}
-
-.directory-subtitle {
-  margin-top: 10rpx;
 }
 
 .directory-state {

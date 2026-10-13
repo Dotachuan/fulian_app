@@ -1,6 +1,8 @@
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 import random
+import re
+import unicodedata
 from typing import Optional
 
 from sqlalchemy import func
@@ -16,7 +18,9 @@ from app.schemas.member import MemberBindingCodeCreateIn, MemberProfileUpdate, M
 MEMBER_LEVEL_DIRECTOR = "director"
 MEMBER_LEVEL_MEMBER = "member"
 MEMBER_LEVEL_NON_MEMBER = "non_member"
-DIRECTOR_DONATION_THRESHOLD = Decimal("30000")
+DIRECTOR_TOTAL_DONATION_THRESHOLD = Decimal("200000")
+DIRECTOR_RECENT_FIVE_YEAR_THRESHOLD = Decimal("15000")
+MEMBER_ANNUAL_DONATION_STANDARD = Decimal("5000")
 
 BINDING_SOURCE_AUTO = "auto"
 BINDING_SOURCE_MANUAL = "manual"
@@ -26,11 +30,10 @@ BINDING_SOURCE_REQUEST = "request"
 
 def get_member_level_label(level: str) -> str:
     return {
-        MEMBER_LEVEL_DIRECTOR: "理事",
-        MEMBER_LEVEL_MEMBER: "会员",
+        MEMBER_LEVEL_DIRECTOR: "理事捐赠人",
+        MEMBER_LEVEL_MEMBER: "会员捐赠人",
         MEMBER_LEVEL_NON_MEMBER: "非会员",
     }.get(level, "非会员")
-
 
 def _binding_status_for_matches(match_count: int) -> str:
     if match_count == 1:
@@ -187,73 +190,101 @@ def get_member(db: Session, member_id: int) -> Optional[Member]:
 
 
 def get_member_level(db: Session, donor_id: Optional[int], today: Optional[date] = None) -> str:
-    _ = today
+    today = today or date.today()
     if not donor_id:
         return MEMBER_LEVEL_NON_MEMBER
 
-    standard_filters = (
-        Donation.is_deleted == False,
-        Donation.status == "normal",
-        Donation.donor_id == donor_id,
-    )
-    total_count, total_amount = (
-        db.query(
-            func.count(Donation.id),
-            func.coalesce(func.sum(Donation.amount), 0),
+    donations = (
+        db.query(Donation.donation_date, Donation.amount)
+        .filter(
+            Donation.is_deleted == False,
+            Donation.status == "normal",
+            Donation.donor_id == donor_id,
         )
-        .filter(*standard_filters)
-        .one()
+        .all()
     )
-    total_count = int(total_count or 0)
-    total_amount = Decimal(str(total_amount or 0))
+    if not donations:
+        return MEMBER_LEVEL_NON_MEMBER
 
-    if total_amount >= DIRECTOR_DONATION_THRESHOLD:
+    recent_start = date(today.year - 4, 1, 1)
+    total_amount = Decimal("0")
+    recent_five_year_amount = Decimal("0")
+    amount_by_year: dict[int, Decimal] = {}
+
+    for donation_date, amount in donations:
+        donation_amount = Decimal(str(amount or 0))
+        total_amount += donation_amount
+        if donation_date and donation_date >= recent_start:
+            recent_five_year_amount += donation_amount
+        if donation_date:
+            amount_by_year[donation_date.year] = amount_by_year.get(donation_date.year, Decimal("0")) + donation_amount
+
+    if (
+        total_amount >= DIRECTOR_TOTAL_DONATION_THRESHOLD
+        or recent_five_year_amount >= DIRECTOR_RECENT_FIVE_YEAR_THRESHOLD
+    ):
         return MEMBER_LEVEL_DIRECTOR
-    if total_count > 0:
+    if any(year_amount >= MEMBER_ANNUAL_DONATION_STANDARD for year_amount in amount_by_year.values()):
         return MEMBER_LEVEL_MEMBER
     return MEMBER_LEVEL_NON_MEMBER
 
 
 def get_member_level_map(db: Session, donor_ids: list[int], today: Optional[date] = None) -> dict[int, str]:
-    _ = today
+    today = today or date.today()
     donor_ids = [donor_id for donor_id in donor_ids if donor_id]
     if not donor_ids:
         return {}
 
-    standard_filters = (
-        Donation.is_deleted == False,
-        Donation.status == "normal",
-        Donation.donor_id.in_(donor_ids),
-    )
-    total_rows = (
-        db.query(
-            Donation.donor_id,
-            func.count(Donation.id),
-            func.coalesce(func.sum(Donation.amount), 0),
+    rows = (
+        db.query(Donation.donor_id, Donation.donation_date, Donation.amount)
+        .filter(
+            Donation.is_deleted == False,
+            Donation.status == "normal",
+            Donation.donor_id.in_(donor_ids),
         )
-        .filter(*standard_filters)
-        .group_by(Donation.donor_id)
         .all()
     )
-    total_map = {
-        donor_id: {
-            "count": int(count or 0),
-            "amount": Decimal(str(amount or 0)),
-        }
-        for donor_id, count, amount in total_rows
-    }
+    recent_start = date(today.year - 4, 1, 1)
+    total_map: dict[int, dict] = {}
+
+    for donor_id, donation_date, amount in rows:
+        donor_total = total_map.setdefault(
+            donor_id,
+            {
+                "amount": Decimal("0"),
+                "recent_five_year_amount": Decimal("0"),
+                "amount_by_year": {},
+            },
+        )
+        donation_amount = Decimal(str(amount or 0))
+        donor_total["amount"] += donation_amount
+        if donation_date and donation_date >= recent_start:
+            donor_total["recent_five_year_amount"] += donation_amount
+        if donation_date:
+            donor_total["amount_by_year"][donation_date.year] = (
+                donor_total["amount_by_year"].get(donation_date.year, Decimal("0")) + donation_amount
+            )
 
     result: dict[int, str] = {}
     for donor_id in donor_ids:
-        donor_total = total_map.get(donor_id, {"count": 0, "amount": Decimal("0")})
-        if donor_total["amount"] >= DIRECTOR_DONATION_THRESHOLD:
+        donor_total = total_map.get(
+            donor_id,
+            {
+                "amount": Decimal("0"),
+                "recent_five_year_amount": Decimal("0"),
+                "amount_by_year": {},
+            },
+        )
+        if (
+            donor_total["amount"] >= DIRECTOR_TOTAL_DONATION_THRESHOLD
+            or donor_total["recent_five_year_amount"] >= DIRECTOR_RECENT_FIVE_YEAR_THRESHOLD
+        ):
             result[donor_id] = MEMBER_LEVEL_DIRECTOR
-        elif donor_total["count"] > 0:
+        elif any(year_amount >= MEMBER_ANNUAL_DONATION_STANDARD for year_amount in donor_total["amount_by_year"].values()):
             result[donor_id] = MEMBER_LEVEL_MEMBER
         else:
             result[donor_id] = MEMBER_LEVEL_NON_MEMBER
     return result
-
 
 def list_members(
     db: Session,
@@ -273,7 +304,6 @@ def list_members(
     total = q.count()
     items = q.order_by(Member.created_at.desc(), Member.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     return items, total
-
 
 def update_member(db: Session, member: Member, data: MemberUpdate) -> Member:
     values = data.model_dump(exclude_unset=True)
@@ -349,6 +379,148 @@ def create_member_binding_request(db: Session, member: Member, name: str, phone:
     return item
 
 
+def _normalize_binding_name(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value or "")
+    return re.sub(r"\s+", "", normalized).strip()
+
+
+def _normalize_binding_phone(value: Optional[str]) -> str:
+    digits = re.sub(r"\D+", "", value or "")
+    if len(digits) == 13 and digits.startswith("86"):
+        return digits[2:]
+    return digits
+
+
+def _find_donors_by_name(db: Session, name: str) -> list[Donor]:
+    normalized_name = _normalize_binding_name(name)
+    donors = db.query(Donor).filter(Donor.is_deleted == False).order_by(Donor.id.asc()).all()
+    return [donor for donor in donors if _normalize_binding_name(donor.name) == normalized_name]
+
+
+def _resolve_pending_binding_requests(db: Session, member: Member, donor: Donor, note: str) -> None:
+    pending_items = (
+        db.query(MemberBindingRequest)
+        .filter(
+            MemberBindingRequest.member_id == member.id,
+            MemberBindingRequest.status == "pending",
+        )
+        .all()
+    )
+    for item in pending_items:
+        item.status = "approved"
+        item.donor_id = donor.id
+        item.admin_note = note
+        item.handled_at = datetime.now()
+
+
+def _queue_binding_review(db: Session, member: Member, name: str, phone: str, reason: str) -> dict:
+    item = create_member_binding_request(db, member, name, phone)
+    item.admin_note = reason
+    member.name = name
+    member.binding_status = "ambiguous"
+    member.binding_source = BINDING_SOURCE_REQUEST
+    db.commit()
+    db.refresh(item)
+    return {
+        "result": "manual_review",
+        "message": reason,
+        "request_id": item.id,
+    }
+
+
+def auto_bind_member_by_name(
+    db: Session,
+    member: Member,
+    name: str,
+    phone: str,
+    *,
+    confirm_create: bool = False,
+) -> dict:
+    submitted_name = unicodedata.normalize("NFKC", name or "").strip()
+    submitted_phone = _normalize_binding_phone(phone)
+    member_phone = _normalize_binding_phone(member.phone)
+
+    if submitted_phone != member_phone:
+        raise ValueError("绑定手机号必须与当前登录手机号一致")
+
+    if member.donor_id:
+        donor = db.get(Donor, member.donor_id)
+        if donor and donor.is_deleted == False:
+            return {
+                "result": "bound",
+                "message": "当前账号已完成绑定",
+                "donor_id": donor.id,
+                "donor_name": donor.name,
+            }
+
+    matches = _find_donors_by_name(db, submitted_name)
+    if len(matches) > 1:
+        return _queue_binding_review(
+            db,
+            member,
+            submitted_name,
+            member.phone,
+            "检测到多个同名档案，请等待管理员确认。",
+        )
+
+    if len(matches) == 1:
+        donor = matches[0]
+        if donor.binding_bound_member_id and donor.binding_bound_member_id != member.id:
+            return _queue_binding_review(
+                db,
+                member,
+                submitted_name,
+                member.phone,
+                "该姓名档案已绑定其他账号，请等待管理员确认。",
+            )
+
+        donor_phone = _normalize_binding_phone(donor.phone)
+        if donor_phone and donor_phone != member_phone:
+            return _queue_binding_review(
+                db,
+                member,
+                submitted_name,
+                member.phone,
+                "姓名已匹配，但预留手机号不一致，请等待管理员确认。",
+            )
+
+        if not donor.phone:
+            donor.phone = member.phone
+        member.name = donor.name
+        _bind_member_to_donor(db, member, donor, BINDING_SOURCE_AUTO, allow_takeover=False)
+        _resolve_pending_binding_requests(db, member, donor, "系统已按姓名自动匹配。")
+        db.commit()
+        db.refresh(member)
+        return {
+            "result": "bound",
+            "message": "已匹配到会员档案并完成绑定",
+            "donor_id": donor.id,
+            "donor_name": donor.name,
+        }
+
+    if not confirm_create:
+        return {
+            "result": "confirm_create",
+            "message": "未找到对应会员档案，请核对姓名；确认无误后可创建新档案。",
+            "donor_name": submitted_name,
+        }
+
+    donor = Donor(name=submitted_name, type="person", phone=member.phone)
+    db.add(donor)
+    db.flush()
+    member.name = submitted_name
+    _bind_member_to_donor(db, member, donor, BINDING_SOURCE_AUTO, allow_takeover=False)
+    _resolve_pending_binding_requests(db, member, donor, "系统已创建新档案并完成绑定。")
+    db.commit()
+    db.refresh(member)
+    return {
+        "result": "bound",
+        "message": "已创建新档案并完成绑定",
+        "donor_id": donor.id,
+        "donor_name": donor.name,
+    }
+
+
 def get_latest_member_binding_request(db: Session, member_id: int) -> Optional[MemberBindingRequest]:
     return (
         db.query(MemberBindingRequest)
@@ -384,7 +556,6 @@ def list_member_binding_requests(
         .all()
     )
     return items, total
-
 
 def approve_member_binding_request(
     db: Session,

@@ -3,7 +3,6 @@
     <view class="page-shell">
       <view v-if="!loggedIn" class="state-band">
         <view class="section-title">请先登录</view>
-        <view class="section-subtitle">会员登录后可查看基金列表、当前余额与收支明细。</view>
         <view class="button-primary state-action" @click="goLogin">去登录</view>
       </view>
 
@@ -11,7 +10,6 @@
         <view class="funds-head">
           <view class="section-kicker">财务公示</view>
           <view class="funds-title">基金列表</view>
-          <view class="funds-summary">登录会员可查看基金余额、简介与后续收支明细。</view>
         </view>
 
         <view class="funds-list">

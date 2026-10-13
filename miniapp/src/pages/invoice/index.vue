@@ -69,11 +69,19 @@
           </view>
           <view class="field">
             <text class="field-label">捐赠日期</text>
-            <input
-              v-model="requestForm.donation_date"
-              class="field-input"
-              placeholder="YYYY-MM-DD"
-            />
+            <picker
+              mode="date"
+              :value="requestForm.donation_date || today"
+              :end="today"
+              @change="onDonationDateChange"
+            >
+              <view class="field-input date-picker">
+                <text :class="{ 'date-placeholder': !requestForm.donation_date }">
+                  {{ requestForm.donation_date || '请选择捐赠日期' }}
+                </text>
+                <view class="date-picker-arrow"></view>
+              </view>
+            </picker>
           </view>
           <view class="field">
             <text class="field-label">申请备注</text>
@@ -133,6 +141,19 @@ const member = ref(getMember())
 const memberState = computed(() => getMemberAccessState(member.value))
 const bindingDescription = computed(() => getBindingDescription(member.value))
 
+function formatLocalDate(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const today = formatLocalDate(new Date())
+
+function onDonationDateChange(event) {
+  requestForm.donation_date = event.detail.value
+}
+
 function normalizeAmount(value) {
   return String(value || '')
     .trim()
@@ -153,7 +174,7 @@ function validateRequestForm() {
 
   const donationDate = String(requestForm.donation_date || '').trim()
   if (!donationDate) {
-    uni.showToast({ title: '请输入捐赠日期', icon: 'none' })
+    uni.showToast({ title: '请选择捐赠日期', icon: 'none' })
     return null
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(donationDate)) {
@@ -219,5 +240,25 @@ onShow(() => {
 <style scoped>
 .state-action {
   margin-top: 24rpx;
+}
+
+.date-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+.date-placeholder {
+  color: #9aa4b2;
+}
+
+.date-picker-arrow {
+  width: 14rpx;
+  height: 14rpx;
+  margin-right: 4rpx;
+  border-right: 3rpx solid #7b8798;
+  border-bottom: 3rpx solid #7b8798;
+  transform: rotate(45deg) translateY(-3rpx);
 }
 </style>

@@ -58,6 +58,12 @@ export const getLatestMemberBindingRequest = () =>
 export const createMemberBindingRequest = (data) =>
   request({ url: '/member/binding-request', method: 'POST', data, auth: true })
 
+export const autoBindMember = (data) =>
+  request({ url: '/member/auto-binding', method: 'POST', data, auth: true })
+
+export const createMemberBindingCorrection = (data) =>
+  request({ url: '/member/binding-correction', method: 'POST', data, auth: true })
+
 export const getMemberDonations = (data) =>
   request({ url: '/member/donations', data, auth: true })
 
@@ -84,6 +90,3 @@ export const getMemberFunds = () =>
 
 export const getMemberFundUsage = (fundId, data) =>
   request({ url: `/member/funds/${fundId}/usage`, data, auth: true })
-
-export const createMemberSuggestion = (data) =>
-  request({ url: '/member/suggestions', method: 'POST', data, auth: true })

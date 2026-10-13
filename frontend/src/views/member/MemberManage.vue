@@ -11,7 +11,7 @@
           <el-select v-model="query.binding_status" placeholder="绑定状态" clearable style="width: 160px">
             <el-option label="已绑定" value="bound" />
             <el-option label="待绑定" value="unbound" />
-            <el-option label="手机号重复" value="ambiguous" />
+            <el-option label="需人工确认" value="ambiguous" />
           </el-select>
           <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
         </div>
@@ -237,7 +237,7 @@ const requestForm = reactive({
 })
 
 function bindingText(status) {
-  return { bound: '已绑定', unbound: '待绑定', ambiguous: '手机号重复' }[status] || status
+  return { bound: '已绑定', unbound: '待绑定', ambiguous: '需人工确认' }[status] || status
 }
 
 function bindingType(status) {

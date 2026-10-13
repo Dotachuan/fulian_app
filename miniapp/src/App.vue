@@ -174,6 +174,61 @@ textarea {
   background: #e6e7e1;
 }
 
+.badge-member {
+  position: relative;
+  min-height: 46rpx;
+  padding: 2rpx 20rpx 2rpx 38rpx;
+  border: 1rpx solid rgba(91, 103, 168, 0.28);
+  color: #344075;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0) 46%),
+    linear-gradient(135deg, #edf2fb 0%, #dfe7f6 100%);
+  font-weight: 700;
+}
+
+.badge-member::before {
+  content: '';
+  position: absolute;
+  left: 17rpx;
+  top: 50%;
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #5a67aa;
+  transform: translateY(-50%);
+  box-shadow: 0 0 0 4rpx rgba(90, 103, 170, 0.12);
+}
+
+.badge-primary {
+  position: relative;
+  min-height: 48rpx;
+  padding: 2rpx 22rpx 2rpx 42rpx;
+  border: 1rpx solid rgba(197, 164, 93, 0.72);
+  color: #fff8e7;
+  background:
+    linear-gradient(135deg, rgba(224, 195, 126, 0.28) 0%, rgba(224, 195, 126, 0) 38%),
+    linear-gradient(135deg, #323a76 0%, #4d5596 100%);
+  box-shadow: 0 8rpx 18rpx rgba(50, 58, 118, 0.18);
+  font-weight: 700;
+}
+
+.badge-primary::before {
+  content: '';
+  position: absolute;
+  left: 18rpx;
+  top: 50%;
+  width: 13rpx;
+  height: 13rpx;
+  background: #d7bb73;
+  transform: translateY(-50%) rotate(45deg);
+  box-shadow: 0 0 0 4rpx rgba(215, 187, 115, 0.18);
+}
+
+.badge-muted {
+  color: #7b8799;
+  background: #edf1f6;
+}
+
 .button-primary,
 .button-secondary,
 .button-ghost {

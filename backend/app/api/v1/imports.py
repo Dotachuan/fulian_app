@@ -70,6 +70,8 @@ def _get_or_create_fund(db: Session, name: str):
 
 
 def _is_duplicate(db: Session, donor_id: int, target_id: int, item: dict) -> bool:
+    # The remark contains the source row number, so it cannot be part of the
+    # business key when duplicate rows exist in the imported workbook.
     return (
         db.query(Donation.id)
         .filter(Donation.is_deleted == False)
@@ -77,7 +79,6 @@ def _is_duplicate(db: Session, donor_id: int, target_id: int, item: dict) -> boo
         .filter(Donation.target_id == target_id)
         .filter(Donation.donation_date == date.fromisoformat(item["donation_date"]))
         .filter(Donation.amount == Decimal(item["amount"]))
-        .filter(Donation.remark == item.get("remark", ""))
         .first()
         is not None
     )
@@ -93,7 +94,6 @@ def _fund_income_exists(db: Session, fund_id: int, item: dict, donor_name: str) 
         .filter(FundUsageRecord.project_desc == f"捐赠收入 - {donor_name}")
         .filter(FundUsageRecord.income_amount == Decimal(item["amount"]))
         .filter(FundUsageRecord.expense_amount == Decimal("0"))
-        .filter(FundUsageRecord.remark == f"Donation import income: {item.get('remark', '')}")
         .first()
         is not None
     )

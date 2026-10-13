@@ -1,11 +1,6 @@
 ﻿<template>
   <view class="page profile-page">
     <view class="profile-header">
-      <view class="profile-topline">
-        <view class="profile-top-kicker">会员中心</view>
-        <view v-if="member" class="profile-status">{{ member.status === 'active' ? '账号已启用' : '账号已停用' }}</view>
-      </view>
-
       <view class="profile-identity">
         <view class="profile-avatar-wrap">
           <view class="profile-avatar">
@@ -22,10 +17,8 @@
 
         <view class="profile-main">
           <view class="profile-name">{{ member?.name || '福莲会员' }}</view>
-          <view class="profile-phone">{{ maskedPhone }}</view>
           <view class="profile-badges">
             <text v-if="member" class="badge" :class="memberLevelClass">{{ memberLevelLabel }}</text>
-            <text class="badge" :class="bindingBadgeClass">{{ bindingText }}</text>
           </view>
         </view>
 
@@ -46,7 +39,6 @@
           </view>
           <view class="service-copy">
             <view class="service-title">查看我的捐赠</view>
-            <view class="service-desc">查看累计金额、捐赠明细与捐赠证书。</view>
           </view>
           <view class="service-arrow">→</view>
         </view>
@@ -58,7 +50,6 @@
           </view>
           <view class="service-copy">
             <view class="service-title">捐赠证书</view>
-            <view class="service-desc">生成正式捐赠证书并保存到相册留存。</view>
           </view>
           <view class="service-arrow">→</view>
         </view>
@@ -71,36 +62,25 @@
           </view>
           <view class="service-copy">
             <view class="service-title">开票申请</view>
-            <view class="service-desc">保存开票资料并提交新的开票申请。</view>
           </view>
           <view class="service-arrow">→</view>
         </view>
 
-        <view class="service-row" @click="scrollToBindingRequest()">
-          <view class="service-icon service-icon-suggestion">
+        <view class="service-row" @click="openPage('/pages/binding/index')">
+          <view class="service-icon service-icon-binding">
             <view class="glyph-chat"></view>
             <view class="glyph-chat-line glyph-chat-line-one"></view>
             <view class="glyph-chat-line glyph-chat-line-two"></view>
           </view>
           <view class="service-copy">
-            <view class="service-title">会员绑定</view>
-            <view class="service-desc">提交姓名与手机号，由管理员人工比对绑定。</view>
+            <view class="service-title-line">
+              <view class="service-title">会员绑定</view>
+              <text class="service-status-badge" :class="bindingBadgeClass">{{ bindingText }}</text>
+            </view>
           </view>
           <view class="service-arrow">→</view>
         </view>
 
-        <view class="service-row" @click="scrollToSuggestion()">
-          <view class="service-icon service-icon-suggestion">
-            <view class="glyph-chat"></view>
-            <view class="glyph-chat-line glyph-chat-line-one"></view>
-            <view class="glyph-chat-line glyph-chat-line-two"></view>
-          </view>
-          <view class="service-copy">
-            <view class="service-title">意见建议</view>
-            <view class="service-desc">提交使用反馈、问题记录或希望新增的功能建议。</view>
-          </view>
-          <view class="service-arrow">→</view>
-        </view>
       </view>
     </view>
 
@@ -131,87 +111,9 @@
           <view class="form-label">电话号码</view>
           <input v-model="profileForm.phone" class="form-input" placeholder="请输入手机号码" type="number" />
         </view>
-        <view class="form-note">电话号码仅用于身份验证，不会在会员通讯录中公开展示。</view>
+        <view class="form-note">电话号码仅用于身份验证，不会在通讯录中公开展示。</view>
         <view class="form-actions">
           <view class="button-primary form-save" @click="saveProfile">{{ saving ? '保存中...' : '保存会员信息' }}</view>
-        </view>
-      </view>
-    </view>
-
-    <view v-if="member" id="binding-request-section" class="profile-band profile-band-muted">
-      <view class="band-head compact-head">
-        <view class="band-title">{{ memberState === 'bound' ? '会员绑定' : '提交绑定申请' }}</view>
-      </view>
-      <view class="state-copy">
-        {{ memberState === 'bound' ? '当前会员已完成捐赠人绑定。' : '请填写姓名和手机号提交申请，管理员会根据后台捐赠记录进行人工比对并完成绑定。' }}
-      </view>
-      <view v-if="memberState === 'bound'" class="binding-request-status">
-        <view class="binding-request-line">
-          <text>绑定状态：</text>
-          <text>已完成绑定</text>
-        </view>
-      </view>
-      <view v-else-if="bindingRequest" class="binding-request-status">
-        <view class="binding-request-line">
-          <text>最近申请：</text>
-          <text>{{ requestStatusText(bindingRequest.status) }}</text>
-        </view>
-        <view v-if="bindingRequest.admin_note" class="binding-request-note">{{ bindingRequest.admin_note }}</view>
-      </view>
-      <view v-if="memberState !== 'bound'" class="profile-form compact-form">
-        <view class="form-row">
-          <view class="form-label">姓名</view>
-          <input v-model="bindingRequestForm.name" class="form-input" placeholder="请输入姓名" />
-        </view>
-        <view class="form-row">
-          <view class="form-label">手机号</view>
-          <input v-model="bindingRequestForm.phone" class="form-input" placeholder="请输入手机号码" type="number" />
-        </view>
-        <view class="form-actions">
-          <view class="button-primary form-save" @click="submitBindingRequest">
-            {{ submittingBindingRequest ? '提交中...' : bindingRequest?.status === 'pending' ? '更新申请' : '提交申请' }}
-          </view>
-        </view>
-      </view>
-    </view>
-
-    <view v-if="memberState !== 'bound'" class="profile-band profile-band-muted">
-      <view class="band-head compact-head">
-        <view class="band-title">当前状态说明</view>
-      </view>
-      <view class="state-copy">{{ bindingDescription }}</view>
-    </view>
-
-    <view id="suggestion-section" class="profile-band">
-      <view class="band-head">
-        <view class="band-title">意见建议</view>
-        <view class="band-subtitle">欢迎提交你在使用过程中的想法、问题或改进建议。</view>
-      </view>
-
-      <view v-if="!member" class="band-empty">
-        <view class="band-empty-copy">登录后可提交意见建议，帮助我们持续完善服务体验。</view>
-        <view class="button-primary login-btn" @click="goLogin">去登录</view>
-      </view>
-
-      <view v-else class="suggestion-form">
-        <view class="form-row">
-          <view class="form-label">联系方式</view>
-          <input v-model="suggestionForm.contact" class="form-input" placeholder="可填写手机号、微信号或邮箱（选填）" />
-        </view>
-        <view class="form-row form-row-textarea">
-          <view class="form-label">建议内容</view>
-          <textarea
-            v-model="suggestionForm.content"
-            class="form-textarea"
-            maxlength="2000"
-            placeholder="请输入你的建议、反馈的问题，或希望新增的功能"
-          />
-          <view class="textarea-count">{{ suggestionForm.content.length }}/2000</view>
-        </view>
-        <view class="form-actions">
-          <view class="button-primary form-save" @click="submitSuggestion">
-            {{ submittingSuggestion ? '提交中...' : '提交建议' }}
-          </view>
         </view>
       </view>
     </view>
@@ -240,9 +142,6 @@
 import { computed, reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import {
-  createMemberBindingRequest,
-  createMemberSuggestion,
-  getLatestMemberBindingRequest,
   getMemberMe,
   getMemberProfile,
   updateMemberProfile,
@@ -252,10 +151,8 @@ import { getPublicContact } from '../../api/public'
 import { normalizeMediaUrl } from '../../utils/media'
 import {
   getBindingBadgeClass,
-  getBindingDescription,
   getBindingText,
   getMember,
-  getMemberAccessState,
   getMemberLevelClass,
   getMemberLevelLabel,
   goLogin,
@@ -265,8 +162,6 @@ import {
 
 const member = ref(getMember())
 const saving = ref(false)
-const submittingSuggestion = ref(false)
-const submittingBindingRequest = ref(false)
 const avatarUploading = ref(false)
 const profileForm = reactive({
   name: '',
@@ -274,25 +169,13 @@ const profileForm = reactive({
   resident_city: '',
   phone: '',
 })
-const bindingRequest = ref(null)
-const bindingRequestForm = reactive({
-  name: '',
-  phone: '',
-})
-const suggestionForm = reactive({
-  contact: '',
-  content: '',
-})
 const contact = ref(null)
 
-const memberState = computed(() => getMemberAccessState(member.value))
 const bindingText = computed(() => getBindingText(member.value))
 const bindingBadgeClass = computed(() => getBindingBadgeClass(member.value))
-const bindingDescription = computed(() => getBindingDescription(member.value))
 const memberLevelLabel = computed(() => getMemberLevelLabel(member.value))
 const memberLevelClass = computed(() => getMemberLevelClass(member.value))
 const avatarUrl = computed(() => normalizeMediaUrl(member.value?.avatar_url || ''))
-const contactSummary = computed(() => contact.value?.summary || '基金会联系方式与对外沟通渠道。')
 const contactRows = computed(() => {
   const content = String(contact.value?.content || '').trim()
   if (!content) return []
@@ -315,19 +198,11 @@ const contactRows = computed(() => {
     })
     .filter((item) => item.value)
 })
-const maskedPhone = computed(() => {
-  const phone = member.value?.phone
-  if (!phone) return '登录后查看会员信息'
-  return String(phone).replace(/^(\d{3})\d{4}(\d{2,4})$/, '$1******$2')
-})
-
 function fillProfileForm(payload = {}) {
   profileForm.name = payload.name || ''
   profileForm.work_unit = payload.work_unit || ''
   profileForm.resident_city = payload.resident_city || ''
   profileForm.phone = payload.phone || member.value?.phone || ''
-  if (!bindingRequestForm.name) bindingRequestForm.name = profileForm.name
-  if (!bindingRequestForm.phone) bindingRequestForm.phone = profileForm.phone
 }
 
 async function loadProfile() {
@@ -342,13 +217,6 @@ async function loadProfile() {
   member.value = latestMember
   setMember(latestMember)
   fillProfileForm(profile)
-  if (latestMember?.binding_status !== 'bound') {
-    bindingRequest.value = await getLatestMemberBindingRequest().catch(() => null)
-    bindingRequestForm.name = bindingRequest.value?.name || profile.name || latestMember.name || ''
-    bindingRequestForm.phone = bindingRequest.value?.phone || profile.phone || latestMember.phone || ''
-  } else {
-    bindingRequest.value = null
-  }
 }
 
 async function loadContact() {
@@ -367,39 +235,9 @@ function openPage(url) {
   uni.navigateTo({ url })
 }
 
-function switchTabPage(url) {
-  if (!member.value) {
-    goLogin()
-    return
-  }
-  uni.switchTab({ url })
-}
-
 function scrollToProfile() {
   uni.pageScrollTo({
     selector: '#member-profile',
-    duration: 220,
-  })
-}
-
-function scrollToSuggestion() {
-  if (!member.value) {
-    goLogin()
-    return
-  }
-  uni.pageScrollTo({
-    selector: '#suggestion-section',
-    duration: 220,
-  })
-}
-
-function scrollToBindingRequest() {
-  if (!member.value) {
-    goLogin()
-    return
-  }
-  uni.pageScrollTo({
-    selector: '#binding-request-section',
     duration: 220,
   })
 }
@@ -441,7 +279,13 @@ async function chooseAvatarFromAlbum() {
     setMember(member.value)
     uni.showToast({ title: '头像已更新', icon: 'none' })
   } catch (error) {
-    if (!String(error?.errMsg || '').includes('cancel')) {
+    const message = String(error?.errMsg || error?.message || '')
+    if (message.includes('cancel')) {
+      return
+    }
+    if (isPermissionDenied(message)) {
+      showPermissionGuide('需要打开相册权限后才能更换头像')
+    } else {
       uni.showToast({ title: '头像上传失败', icon: 'none' })
     }
   } finally {
@@ -449,52 +293,21 @@ async function chooseAvatarFromAlbum() {
   }
 }
 
-function requestStatusText(status) {
-  return { pending: '待管理员处理', approved: '已通过', rejected: '已驳回' }[status] || status || '-'
+function isPermissionDenied(message) {
+  return /auth|authorize|permission|denied|fail auth|privacy|相册|权限/i.test(message)
 }
 
-async function submitBindingRequest() {
-  if (!member.value || submittingBindingRequest.value) return
-  const name = String(bindingRequestForm.name || '').trim()
-  const phone = String(bindingRequestForm.phone || '').trim()
-  if (!name) {
-    uni.showToast({ title: '请输入姓名', icon: 'none' })
-    return
-  }
-  if (!/^1[3-9]\d{9}$/.test(phone)) {
-    uni.showToast({ title: '请输入正确手机号', icon: 'none' })
-    return
-  }
-  submittingBindingRequest.value = true
-  try {
-    bindingRequest.value = await createMemberBindingRequest({ name, phone })
-    const latestMember = await getMemberMe()
-    member.value = latestMember
-    setMember(latestMember)
-    uni.showToast({ title: '申请已提交', icon: 'none' })
-  } finally {
-    submittingBindingRequest.value = false
-  }
-}
-
-async function submitSuggestion() {
-  if (!member.value || submittingSuggestion.value) return
-  if (!String(suggestionForm.content || '').trim()) {
-    uni.showToast({ title: '请输入建议内容', icon: 'none' })
-    return
-  }
-  submittingSuggestion.value = true
-  try {
-    await createMemberSuggestion({
-      contact: suggestionForm.contact,
-      content: suggestionForm.content,
-    })
-    suggestionForm.contact = ''
-    suggestionForm.content = ''
-    uni.showToast({ title: '感谢你的建议', icon: 'none' })
-  } finally {
-    submittingSuggestion.value = false
-  }
+function showPermissionGuide(content) {
+  uni.showModal({
+    title: '权限未开启',
+    content,
+    confirmText: '去设置',
+    success: (res) => {
+      if (res.confirm) {
+        uni.openSetting()
+      }
+    },
+  })
 }
 
 function logout() {
@@ -527,21 +340,8 @@ onShow(() => {
 }
 
 .profile-header {
-  padding: 42rpx 28rpx 24rpx;
+  padding: 34rpx 28rpx 24rpx;
   background: linear-gradient(180deg, rgba(225, 232, 247, 0.92) 0%, rgba(247, 250, 255, 0.98) 100%);
-}
-
-.profile-topline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.profile-top-kicker,
-.profile-status {
-  color: #667791;
-  font-size: 22rpx;
-  letter-spacing: 1.5rpx;
 }
 
 .profile-identity {
@@ -549,7 +349,6 @@ onShow(() => {
   grid-template-columns: 112rpx minmax(0, 1fr) 48rpx;
   gap: 22rpx;
   align-items: center;
-  margin-top: 26rpx;
 }
 
 .profile-avatar-wrap {
@@ -606,23 +405,23 @@ onShow(() => {
   font-weight: 700;
 }
 
-.profile-phone {
-  display: inline-flex;
-  align-items: center;
-  min-height: 48rpx;
-  margin-top: 12rpx;
-  padding: 0 20rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.72);
-  color: #64758d;
-  font-size: 24rpx;
-}
-
 .profile-badges {
   display: flex;
   gap: 10rpx;
-  margin-top: 14rpx;
+  margin-top: 12rpx;
   flex-wrap: wrap;
+}
+
+.profile-badges .badge {
+  min-height: 42rpx;
+  padding: 4rpx 18rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.profile-badges .badge::before {
+  display: none;
 }
 
 .profile-enter {
@@ -640,16 +439,8 @@ onShow(() => {
   margin-top: 16rpx;
 }
 
-.profile-band-muted {
-  background: #f9fbff;
-}
-
 .band-head {
   margin-bottom: 12rpx;
-}
-
-.compact-head {
-  margin-bottom: 4rpx;
 }
 
 .band-title {
@@ -666,8 +457,7 @@ onShow(() => {
 }
 
 .service-list,
-.profile-form,
-.suggestion-form {
+.profile-form {
   border-top: 1rpx solid #e6edf5;
 }
 
@@ -676,7 +466,7 @@ onShow(() => {
   grid-template-columns: 88rpx minmax(0, 1fr) 36rpx;
   gap: 18rpx;
   align-items: center;
-  min-height: 132rpx;
+  min-height: 104rpx;
   border-bottom: 1rpx solid #e6edf5;
 }
 
@@ -692,11 +482,23 @@ onShow(() => {
   font-weight: 700;
 }
 
-.service-desc {
-  margin-top: 8rpx;
-  color: #72829a;
-  font-size: 23rpx;
-  line-height: 1.68;
+.service-title-line {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  min-width: 0;
+}
+
+.service-status-badge {
+  max-width: 190rpx;
+  padding: 5rpx 12rpx;
+  border-radius: 999rpx;
+  font-size: 21rpx;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .service-arrow {
@@ -709,7 +511,7 @@ onShow(() => {
 .service-icon-certificate,
 .service-icon-invoice,
 .service-icon-directory,
-.service-icon-suggestion {
+.service-icon-binding {
   border-radius: 18rpx;
   background: linear-gradient(135deg, #eef2fb 0%, #dde5f6 100%);
 }
@@ -953,10 +755,6 @@ onShow(() => {
   border-bottom: 1rpx solid #e6edf5;
 }
 
-.form-row-textarea {
-  min-height: auto;
-}
-
 .form-label {
   color: #68778f;
   font-size: 23rpx;
@@ -967,22 +765,6 @@ onShow(() => {
   color: #1b2536;
   font-size: 28rpx;
   min-height: 42rpx;
-}
-
-.form-textarea {
-  width: 100%;
-  min-height: 220rpx;
-  margin-top: 14rpx;
-  color: #1b2536;
-  font-size: 28rpx;
-  line-height: 1.7;
-}
-
-.textarea-count {
-  padding: 8rpx 0 0;
-  color: #8a96a8;
-  font-size: 22rpx;
-  text-align: right;
 }
 
 .form-note {
@@ -998,13 +780,6 @@ onShow(() => {
 
 .form-save {
   width: 100%;
-}
-
-.state-copy {
-  padding: 12rpx 0 22rpx;
-  color: #6f7f98;
-  font-size: 24rpx;
-  line-height: 1.78;
 }
 
 .contact-list {
@@ -1032,63 +807,6 @@ onShow(() => {
   font-weight: 600;
   line-height: 1.62;
   word-break: break-all;
-}
-
-.binding-code-row {
-  display: flex;
-  gap: 16rpx;
-  padding-bottom: 22rpx;
-}
-
-.binding-code-input {
-  flex: 1;
-  height: 88rpx;
-  padding: 0 24rpx;
-  border-radius: 22rpx;
-  background: rgba(255, 255, 255, 0.92);
-  color: #1b2536;
-  font-size: 28rpx;
-}
-
-.binding-code-btn {
-  min-width: 176rpx;
-  height: 88rpx;
-  padding: 0 28rpx;
-  border-radius: 22rpx;
-  background: #384e85;
-  color: #ffffff;
-  font-size: 26rpx;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.binding-request-status {
-  margin: 20rpx 0 18rpx;
-  padding: 18rpx 22rpx;
-  border-left: 6rpx solid #485291;
-  background: rgba(72, 82, 145, 0.07);
-}
-
-.binding-request-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: #273244;
-  font-size: 26rpx;
-  font-weight: 700;
-}
-
-.binding-request-note {
-  margin-top: 10rpx;
-  color: #74829a;
-  font-size: 24rpx;
-  line-height: 1.6;
-}
-
-.compact-form {
-  margin-top: 20rpx;
 }
 
 .logout-row {

@@ -18,6 +18,7 @@ from app.crud import fund as crud_fund
 from app.crud import invoice_request as crud_invoice
 from app.crud import member as crud_member
 from app.models.donation import Donation
+from app.services.certificate_generator import generate_certificate_image
 from app.models.member_suggestion import MemberSuggestion
 from app.schemas.fund import FundPublicOut, PublicFundUsagePage
 from app.schemas.invoice_request import InvoiceRequestCreate, InvoiceRequestPublicOut
@@ -25,6 +26,8 @@ from app.schemas.member import (
     MemberBindingCodeRedeemIn,
     MemberBindingRequestCreate,
     MemberBindingRequestOut,
+    MemberAutoBindingIn,
+    MemberAutoBindingOut,
     MemberCertificateOut,
     MemberAvatarFromUrlIn,
     MemberDirectoryItem,
@@ -198,6 +201,42 @@ def get_latest_binding_request(
     return _serialize_binding_request(item)
 
 
+@router.post("/member/auto-binding", response_model=MemberAutoBindingOut)
+def auto_bind_member(
+    data: MemberAutoBindingIn,
+    db: Session = Depends(get_db),
+    current_member=Depends(get_current_member),
+):
+    try:
+        return crud_member.auto_bind_member_by_name(
+            db,
+            current_member,
+            data.name,
+            data.phone,
+            confirm_create=data.confirm_create,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/member/binding-correction", response_model=MemberBindingRequestOut, status_code=201)
+def create_binding_correction(
+    data: MemberBindingRequestCreate,
+    db: Session = Depends(get_db),
+    current_member=Depends(get_current_member),
+):
+    if not current_member.donor_id:
+        raise HTTPException(status_code=400, detail="当前账号尚未绑定，请先使用自动匹配")
+    if data.phone != current_member.phone:
+        raise HTTPException(status_code=400, detail="更正手机号必须与当前登录手机号一致")
+
+    item = crud_member.create_member_binding_request(db, current_member, data.name, data.phone)
+    item.admin_note = "用户反馈当前绑定信息有误，请核对后重新绑定。"
+    db.commit()
+    db.refresh(item)
+    return _serialize_binding_request(item)
+
+
 @router.post("/member/binding-request", response_model=MemberBindingRequestOut, status_code=201)
 def create_binding_request(
     data: MemberBindingRequestCreate,
@@ -348,17 +387,32 @@ def member_certificate(
         )
         .scalar()
     )
+    current_year_amount_decimal = Decimal(str(current_year_amount or 0))
+    member_level = crud_member.get_member_level(db, current_member.donor_id)
+    issued_on = date.today()
+    template_key, poster_url = generate_certificate_image(
+        donor_name=summary["donor_name"],
+        total_amount=summary["total_amount"],
+        current_year_amount=current_year_amount_decimal,
+        support_years=summary["support_years"],
+        issued_on=issued_on,
+        member_level=member_level,
+    )
     return {
         **summary,
-        "current_year_amount": Decimal(str(current_year_amount or 0)),
+        "current_year_amount": current_year_amount_decimal,
+        "member_level": member_level,
+        "member_level_label": crud_member.get_member_level_label(member_level),
         "title": "福莲教育促进会捐赠证书",
         "subtitle": "谨以此证，感谢您对教育公益事业的持续支持。",
         "message": (
-            f"感谢您今年捐赠人民币 {Decimal(str(current_year_amount or 0))} 元，"
+            f"感谢您今年捐赠人民币 {current_year_amount_decimal} 元，"
             f"截至目前，您已累计捐赠 {summary['total_amount']} 元。"
         ),
         "footer": "福莲教育促进会",
-        "issued_on": date.today().isoformat(),
+        "issued_on": issued_on.isoformat(),
+        "template_key": template_key,
+        "poster_url": poster_url,
     }
 
 

@@ -15,15 +15,15 @@
 
         <!-- #ifdef MP-WEIXIN -->
         <button
-          class="button-primary wechat-phone-btn"
-          :class="{ 'button-disabled': wechatLoggingIn }"
+          class="button-primary phone-login-btn"
+          :class="{ 'button-disabled': phoneLoggingIn }"
           open-type="getPhoneNumber"
-          @getphonenumber="handleWechatPhoneLogin"
+          @getphonenumber="handlePhoneLogin"
         >
-          {{ wechatLoggingIn ? '登录中...' : '微信手机号登录' }}
+          {{ phoneLoggingIn ? '登录中...' : '手机号快捷登录' }}
         </button>
         <view class="field-tip">
-          开发者工具模拟器通常无法直接获取微信绑定手机号，请优先使用真机预览；联调阶段也可改用下方验证码登录。
+          开发者工具模拟器可能无法获取手机号，请优先使用真机预览；联调阶段也可使用下方验证码登录。
         </view>
         <!-- #endif -->
       </view>
@@ -95,7 +95,7 @@ const debugCode = ref('')
 const countdown = ref(0)
 const sendingCode = ref(false)
 const loggingIn = ref(false)
-const wechatLoggingIn = ref(false)
+const phoneLoggingIn = ref(false)
 let timer = null
 
 const phoneValid = computed(() => /^1\d{10}$/.test(phone.value))
@@ -118,7 +118,7 @@ function startCountdown() {
   }, 1000)
 }
 
-async function syncWechatAvatarIfNeeded(member) {
+async function syncAvatarIfNeeded(member) {
   // #ifdef MP-WEIXIN
   if (!member || member.avatar_url) return member
   try {
@@ -146,8 +146,8 @@ async function syncWechatAvatarIfNeeded(member) {
 async function finishLogin(res, options = {}) {
   setToken(res.access_token)
   let nextMember = res.member
-  if (options.syncWechatAvatar) {
-    nextMember = await syncWechatAvatarIfNeeded(nextMember)
+  if (options.syncAvatar) {
+    nextMember = await syncAvatarIfNeeded(nextMember)
   }
   setMember(nextMember)
   uni.showToast({ title: '登录成功', icon: 'none' })
@@ -195,21 +195,21 @@ async function handleLogin() {
   }
 }
 
-async function handleWechatPhoneLogin(event) {
-  if (wechatLoggingIn.value) return
+async function handlePhoneLogin(event) {
+  if (phoneLoggingIn.value) return
 
   const phoneCode = event?.detail?.code
   if (!phoneCode) {
-    uni.showToast({ title: '当前环境未拿到微信手机号授权，请用真机预览或改用验证码登录', icon: 'none' })
+    uni.showToast({ title: '当前环境未获取到手机号，请使用真机预览或改用验证码登录', icon: 'none' })
     return
   }
 
-  wechatLoggingIn.value = true
+  phoneLoggingIn.value = true
   try {
     const res = await loginMemberByWechatPhone({ phone_code: phoneCode })
-    await finishLogin(res, { syncWechatAvatar: true })
+    await finishLogin(res, { syncAvatar: true })
   } finally {
-    wechatLoggingIn.value = false
+    phoneLoggingIn.value = false
   }
 }
 
@@ -237,7 +237,7 @@ onUnmounted(() => {
   border-color: rgba(216, 179, 106, 0.24);
 }
 
-.wechat-phone-btn {
+.phone-login-btn {
   width: 100%;
 }
 

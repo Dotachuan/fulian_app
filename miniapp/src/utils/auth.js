@@ -57,7 +57,7 @@ export function getBindingText(member = getMember()) {
   return {
     guest: '尚未登录',
     bound: '已完成绑定',
-    pending: '待管理员绑定',
+    pending: '未绑定',
     ambiguous: '待人工处理',
     member: '状态待确认',
   }[getMemberAccessState(member)]
@@ -75,10 +75,10 @@ export function getBindingBadgeClass(member = getMember()) {
 
 export function getBindingDescription(member = getMember()) {
   return {
-    guest: '登录后可查看本人捐赠、开票申请、会员通讯录与基金公示信息。',
+    guest: '登录后可查看本人捐赠、开票申请、通讯录与基金公示信息。',
     bound: '当前会员已完成捐赠人绑定，可正常使用会员专属服务。',
-    pending: '请在“我的”页面提交姓名和手机号，等待管理员根据捐赠记录完成绑定。',
-    ambiguous: '当前账号需要后台人工确认后才能开放完整会员能力。',
+    pending: '请输入真实姓名，系统将自动匹配会员档案。',
+    ambiguous: '存在同名、手机号不一致或档案占用情况，请等待管理员确认。',
     member: '当前会员状态待确认，请稍后再试或联系管理员。',
   }[getMemberAccessState(member)]
 }
@@ -90,7 +90,7 @@ export function getMemberLevelLabel(member = getMember()) {
 export function getMemberLevelClass(member = getMember()) {
   return {
     director: 'badge-primary',
-    member: 'badge-info',
+    member: 'badge-member',
     non_member: 'badge-muted',
   }[member?.member_level || 'non_member']
 }

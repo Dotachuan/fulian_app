@@ -3,22 +3,19 @@
     <view class="page-shell">
       <view v-if="!loggedIn" class="state-band">
         <view class="section-title">请先登录</view>
-        <view class="section-subtitle">登录后可基于本人累计捐赠数据生成正式捐赠证书。</view>
+        <view class="section-subtitle">登录后可根据本人捐赠记录生成捐赠证书。</view>
         <view class="button-primary state-action" @click="goLogin">去登录</view>
       </view>
 
       <view v-else-if="memberState !== 'bound'" class="state-band">
         <view class="section-title">{{ stateTitle }}</view>
         <view class="section-subtitle">{{ stateDescription }}</view>
-        <view class="button-secondary state-action" @click="goMy">查看会员状态</view>
+        <view class="button-secondary state-action" @click="goMy">查看会员绑定</view>
       </view>
 
       <template v-else>
         <view class="state-band certificate-intro">
-          <view>
-            <view class="section-title">捐赠证书</view>
-            <view class="section-subtitle">证书将根据当前会员捐赠记录自动生成，可保存到相册留存。</view>
-          </view>
+          <view class="section-title">捐赠证书</view>
         </view>
 
         <view class="certificate-panel">
@@ -26,14 +23,79 @@
           <view v-else-if="errorText" class="empty-block">{{ errorText }}</view>
           <template v-else>
             <view class="certificate-preview">
-              <image
-                v-if="posterPath"
-                class="certificate-image"
-                :src="posterPath"
-                mode="widthFix"
-                show-menu-by-longpress
-              />
-              <view v-else class="empty-block preview-empty">证书预览生成中...</view>
+              <view class="template-stage" :class="{ calibrating: showCoordinateTools }">
+                <image
+                  class="template-image"
+                  :src="previewImageUrl"
+                  mode="widthFix"
+                  show-menu-by-longpress
+                  @click="previewCertificate"
+                />
+
+                <view v-if="showCoordinateTools" class="calibration-grid"></view>
+                <view v-if="showCoordinateTools" class="calibration-axis x-axis"></view>
+                <view v-if="showCoordinateTools" class="calibration-axis y-axis"></view>
+
+                <text v-if="showOverlayText" class="fill-text" :style="fieldStyle('donorName')">{{ certificateData.donorName }}</text>
+                <text v-if="showOverlayText && selectedTemplateHasCurrentDonation" class="fill-text" :style="fieldStyle('currentAmount')">
+                  {{ displayCertificateData.currentYearAmount }}
+                </text>
+                <text v-if="showOverlayText" class="fill-text" :style="fieldStyle(totalAmountKey)">{{ displayCertificateData.totalAmount }}</text>
+                <text v-if="showOverlayText" class="fill-text" :style="fieldStyle('supportYears')">{{ certificateData.supportYears }}</text>
+                <text v-if="showOverlayText" class="fill-text" :style="fieldStyle('issuedYear')">{{ issuedDate.year }}</text>
+                <text v-if="showOverlayText" class="fill-text" :style="fieldStyle('issuedMonth')">{{ issuedDate.month }}</text>
+                <text v-if="showOverlayText" class="fill-text" :style="fieldStyle('issuedDay')">{{ issuedDate.day }}</text>
+
+                <template v-if="showCoordinateTools">
+                  <view
+                    v-for="marker in calibrationMarkers"
+                    :key="marker.key"
+                    class="calibration-marker"
+                    :style="markerStyle(marker)"
+                  >
+                    <view class="marker-dot"></view>
+                    <view class="marker-label">{{ marker.label }} {{ marker.left }}%, {{ marker.top }}%</view>
+                  </view>
+                </template>
+              </view>
+            </view>
+
+            <view v-if="certificateDebugEnabled" class="calibration-tools">
+              <view>
+                <view class="calibration-title">模板调试模式</view>
+                <view v-if="templateDebugMode" class="calibration-template">当前模板：{{ selectedTemplate.key }}</view>
+              </view>
+              <switch :checked="templateDebugMode" color="#485291" @change="toggleTemplateDebug" />
+            </view>
+
+            <view v-if="certificateDebugEnabled && templateDebugMode" class="template-debug-panel">
+              <view class="template-debug-title">模板预览切换</view>
+              <view class="template-debug-grid">
+                <view
+                  v-for="item in templateOptions"
+                  :key="item.key"
+                  class="template-debug-option"
+                  :class="{ active: selectedTemplateKey === item.key }"
+                  @click="selectDebugTemplate(item.key)"
+                >
+                  {{ item.shortLabel }}
+                </view>
+              </view>
+            </view>
+
+            <view v-if="certificateDebugEnabled" class="calibration-tools coordinate-tools">
+              <view>
+                <view class="calibration-title">坐标显示</view>
+                <view v-if="coordinateMode" class="calibration-template">显示网格、标记点和坐标列表</view>
+              </view>
+              <switch :checked="coordinateMode" color="#485291" @change="toggleCoordinate" />
+            </view>
+
+            <view v-if="showCoordinateTools" class="coordinate-panel">
+              <view v-for="marker in calibrationMarkers" :key="`coord-${marker.key}`" class="coordinate-row">
+                <view class="coordinate-name">{{ marker.label }}</view>
+                <view class="coordinate-value">left: {{ marker.left }}%; top: {{ marker.top }}%</view>
+              </view>
             </view>
 
             <view class="certificate-actions">
@@ -48,7 +110,7 @@
     <canvas
       canvas-id="certificateCanvas"
       id="certificateCanvas"
-      class="hidden-canvas"
+      class="export-canvas"
       :style="{ width: `${canvasWidth}px`, height: `${canvasHeight}px` }"
       :width="canvasWidth"
       :height="canvasHeight"
@@ -57,23 +119,106 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getMemberCertificate } from '../../api/member'
+import { getAssetOrigin } from '../../config/env'
 import { getBindingDescription, getMember, getMemberAccessState, goLogin, isLoggedIn } from '../../utils/auth'
-import { normalizeMediaUrl } from '../../utils/media'
-import certificateBorderAsset from '../../static/certificate-border-rococo-v4.jpg'
+
+const assetOrigin = getAssetOrigin()
+const templateBaseUrl = `${assetOrigin}/uploads/certificate-templates`
+const templateAssetVersion = '20260904-1'
+const certificateDebugEnabled = false
+const certificateNameFontFamily = 'KaiTi, STKaiti, serif'
+const certificateNumberFontFamily = '"Times New Roman", Times, serif'
+
+const templates = {
+  memberWithCurrent: {
+    key: 'memberWithCurrent',
+    label: '会员捐赠人 · 本年有捐赠',
+    url: `${templateBaseUrl}/member-with-current.jpg?v=${templateAssetVersion}`,
+  },
+  memberWithoutCurrent: {
+    key: 'memberWithoutCurrent',
+    label: '会员捐赠人 · 本年无捐赠',
+    url: `${templateBaseUrl}/member-without-current.jpg?v=${templateAssetVersion}`,
+  },
+  directorWithCurrent: {
+    key: 'directorWithCurrent',
+    label: '理事捐赠人 · 本年有捐赠',
+    url: `${templateBaseUrl}/director-with-current.jpg?v=${templateAssetVersion}`,
+  },
+  directorWithoutCurrent: {
+    key: 'directorWithoutCurrent',
+    label: '理事捐赠人 · 本年无捐赠',
+    url: `${templateBaseUrl}/director-without-current.jpg?v=${templateAssetVersion}`,
+  },
+}
+
+const templateOptions = [
+  { key: 'memberWithCurrent', shortLabel: '会员有捐赠' },
+  { key: 'memberWithoutCurrent', shortLabel: '会员无捐赠' },
+  { key: 'directorWithCurrent', shortLabel: '理事有捐赠' },
+  { key: 'directorWithoutCurrent', shortLabel: '理事无捐赠' },
+]
+
+const canvasWidth = 1870
+const canvasHeight = 1322
+
+function position(label, left, top, width, size, canvasSize, maxWidth, weight = '500') {
+  return { label, left, top, width, size, canvasSize, maxWidth, weight }
+}
+
+// left/top 为相对模板图片左上角的百分比坐标；四套模板分开配置，方便逐个微调。
+// size 控制页面预览字体，canvasSize 控制保存到相册后的字体。
+const templateFillPositions = {
+  memberWithCurrent: {
+    donorName: position('姓名', 28.0, 38.85, 13, 18, 33, 230, '700'),
+    currentAmount: position('今年金额', 40.7, 46.7, 15, 16, 30, 250),
+    totalAmountWithCurrent: position('累计金额', 74.4, 46.7, 15, 16, 30, 270),
+    supportYears: position('年头', 46.2, 59.15, 6, 16, 30, 90),
+    issuedYear: position('年', 72.15, 80.95, 6, 15, 28, 92),
+    issuedMonth: position('月', 77.85, 80.95, 4, 15, 28, 56),
+    issuedDay: position('日', 81.45, 80.95, 4, 15, 28, 56),
+  },
+  memberWithoutCurrent: {
+    donorName: position('姓名', 28.0, 38.85, 13, 18, 33, 230, '700'),
+    totalAmountWithoutCurrent: position('累计金额', 42.6, 46.7, 15, 16, 30, 270),
+    supportYears: position('年头', 46.2, 59.15, 6, 16, 30, 90),
+    issuedYear: position('年', 72.15, 80.95, 6, 15, 28, 92),
+    issuedMonth: position('月',77.85, 80.95, 4, 15, 28, 56),
+    issuedDay: position('日', 81.45, 80.95, 4, 15, 28, 56),
+  },
+  directorWithCurrent: {
+    donorName: position('姓名', 28.0, 38.85, 13, 18, 33, 230, '700'),
+    currentAmount: position('今年金额', 42.2, 46.7, 15, 16, 30, 250),
+    totalAmountWithCurrent: position('累计金额', 79.4, 46.7, 15, 16, 30, 270),
+    supportYears: position('年头', 46.2, 59.15, 6, 16, 30, 90),
+    issuedYear: position('年', 72.15, 80.95, 6, 15, 28, 92),
+    issuedMonth: position('月', 77.85, 80.95, 4, 15, 28, 56),
+    issuedDay: position('日', 81.45, 80.95, 4, 15, 28, 56),
+  },
+  directorWithoutCurrent: {
+    donorName: position('姓名', 28.0, 38.85, 13, 18, 33, 230, '700'),
+    totalAmountWithoutCurrent: position('累计金额', 44.5, 46.7, 15, 16, 30, 270),
+    supportYears: position('年头', 46.2, 59.15, 6, 16, 30, 90),
+    issuedYear: position('年', 72.15, 80.95, 6, 15, 28, 92),
+    issuedMonth: position('月', 77.85, 80.95, 4, 15, 28, 56),
+    issuedDay: position('日', 81.45, 80.95, 4, 15, 28, 56),
+  },
+}
 
 const member = ref(getMember())
 const posterPath = ref('')
 const loading = ref(false)
 const errorText = ref('')
-const sealImagePath = ref('')
-const borderImagePath = ref(certificateBorderAsset)
-
-const canvasWidth = 1200
-const canvasHeight = 1697
-const certificateLogoUrl = normalizeMediaUrl('/uploads/system/foundation-logo.jpg')
+const templateImagePath = ref('')
+const rawCertificate = ref(null)
+const templateDebugMode = ref(false)
+const coordinateMode = ref(false)
+const debugTemplateKey = ref('')
+const templateCacheKey = ref(Date.now())
+const previewStageWidth = ref(0)
 
 const loggedIn = computed(() => isLoggedIn())
 const memberState = computed(() => getMemberAccessState(member.value))
@@ -85,618 +230,391 @@ const stateTitle = computed(() => {
 })
 const stateDescription = computed(() => getBindingDescription(member.value))
 
+const certificateData = computed(() => {
+  const data = rawCertificate.value || {}
+  const currentYearAmountValue = Number(data.current_year_amount || 0)
+  return {
+    donorName: data.donor_name || member.value?.donor_name || member.value?.name || '福莲会员',
+    memberLevel: member.value?.member_level || data.member_level || 'member',
+    currentYearAmount: formatAmount(currentYearAmountValue),
+    totalAmount: formatAmount(data.total_amount),
+    supportYears: String(data.support_years || 1),
+    hasCurrentDonation: currentYearAmountValue > 0,
+  }
+})
+
+const autoTemplateKey = computed(() => {
+  const isDirector = certificateData.value.memberLevel === 'director'
+  const hasCurrent = certificateData.value.hasCurrentDonation
+  if (isDirector && hasCurrent) return 'directorWithCurrent'
+  if (isDirector) return 'directorWithoutCurrent'
+  if (hasCurrent) return 'memberWithCurrent'
+  return 'memberWithoutCurrent'
+})
+
+const selectedTemplateKey = computed(() => {
+  if (certificateDebugEnabled && templateDebugMode.value && debugTemplateKey.value && templates[debugTemplateKey.value]) {
+    return debugTemplateKey.value
+  }
+  return autoTemplateKey.value
+})
+
+const selectedTemplate = computed(() => templates[selectedTemplateKey.value])
+const selectedTemplateUrl = computed(() => `${selectedTemplate.value.url}&cache=${templateCacheKey.value}`)
+const serverPosterUrl = computed(() => {
+  if (certificateDebugEnabled && templateDebugMode.value) return ''
+  return rawCertificate.value?.poster_url || ''
+})
+const previewImageUrl = computed(() => serverPosterUrl.value || selectedTemplateUrl.value)
+const showOverlayText = computed(() => !serverPosterUrl.value)
+const currentPositions = computed(() => templateFillPositions[selectedTemplateKey.value])
+const showCoordinateTools = computed(() => certificateDebugEnabled && coordinateMode.value)
+const selectedTemplateHasCurrentDonation = computed(() => selectedTemplateKey.value.endsWith('WithCurrent'))
+const totalAmountKey = computed(() => {
+  return selectedTemplateHasCurrentDonation.value ? 'totalAmountWithCurrent' : 'totalAmountWithoutCurrent'
+})
+
+const displayCertificateData = computed(() => {
+  if (!certificateDebugEnabled || !templateDebugMode.value) return certificateData.value
+  const isDirectorTemplate = selectedTemplateKey.value.startsWith('director')
+  return {
+    ...certificateData.value,
+    currentYearAmount: formatAmount(isDirectorTemplate ? 100000 : 2000),
+    totalAmount: formatAmount(isDirectorTemplate ? 1000000 : 20000),
+  }
+})
+
+const issuedDate = computed(() => {
+  const raw = rawCertificate.value?.issued_on
+  const date = raw ? new Date(raw) : new Date()
+  if (Number.isNaN(date.getTime())) return splitDate(new Date())
+  return splitDate(date)
+})
+
+const calibrationMarkers = computed(() => {
+  const keys = ['donorName']
+  if (selectedTemplateHasCurrentDonation.value) keys.push('currentAmount')
+  keys.push(totalAmountKey.value, 'supportYears', 'issuedYear', 'issuedMonth', 'issuedDay')
+  return keys.map((key) => ({ key, ...currentPositions.value[key] })).filter((item) => item.left !== undefined)
+})
+
+function splitDate(date) {
+  return {
+    year: String(date.getFullYear()),
+    month: String(date.getMonth() + 1),
+    day: String(date.getDate()),
+  }
+}
+
 function formatAmount(value) {
   return Number(value || 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 0,
   })
 }
 
-function formatIssuedOn(value) {
-  if (!value) return ''
-  const parts = String(value).split('-')
-  if (parts.length !== 3) return String(value)
-  return `${parts[0]}年${Number(parts[1])}月${Number(parts[2])}日`
-}
-
-function wrapText(ctx, text, x, y, maxWidth, lineHeight, firstLineIndent = 0) {
-  let line = ''
-  let currentY = y
-  let currentX = x + firstLineIndent
-  let currentMaxWidth = maxWidth - firstLineIndent
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i]
-    const testLine = line + char
-    if (ctx.measureText(testLine).width > currentMaxWidth && line) {
-      ctx.fillText(line, currentX, currentY)
-      currentY += lineHeight
-      line = char
-      currentX = x
-      currentMaxWidth = maxWidth
-    } else {
-      line = testLine
-    }
-  }
-  if (line) {
-    ctx.fillText(line, currentX, currentY)
-    currentY += lineHeight
-  }
-  return currentY
-}
-
-function applyCanvasFont(ctx, size, family = 'sans-serif', weight = 'normal') {
-  ctx.setFontSize(size)
-  try {
-    ctx.font = `${weight} ${size}px ${family}`
-  } catch {
-    // Keep miniapp canvas fallback behavior when custom font family is unsupported.
+function fieldStyle(key) {
+  const item = currentPositions.value[key]
+  if (!item) return {}
+  return {
+    left: `${item.left}%`,
+    top: `${item.top}%`,
+    width: `${item.width}%`,
+    fontSize: `${item.size}rpx`,
+    fontWeight: item.weight,
+    fontFamily: getFieldFontFamily(key),
   }
 }
 
-function drawFoilText(ctx, text, x, y, options = {}) {
-  const {
-    size = 100,
-    family = 'serif',
-    weight = '700',
-    align = 'center',
-    letterSpacing = 0,
-    glow = false,
-  } = options
-
-  const gradient = ctx.createLinearGradient(x, y - size, x, y + 24)
-  gradient.addColorStop(0, '#f7ebbf')
-  gradient.addColorStop(0.22, '#e5cc74')
-  gradient.addColorStop(0.5, '#b88d2e')
-  gradient.addColorStop(0.78, '#f0dc97')
-  gradient.addColorStop(1, '#9f7524')
-
-  ctx.save()
-  ctx.setTextAlign(align)
-  applyCanvasFont(ctx, size, family, weight)
-
-  if (glow) {
-    ctx.setGlobalAlpha(0.22)
-    ctx.setFillStyle('#fff6d2')
-    drawSpacedText(ctx, text, x, y - 3, letterSpacing, align)
-    ctx.setGlobalAlpha(1)
+function markerStyle(marker) {
+  return {
+    left: `${marker.left}%`,
+    top: `${marker.top}%`,
   }
-
-  ctx.setFillStyle('rgba(126, 90, 24, 0.28)')
-  drawSpacedText(ctx, text, x, y + 3, letterSpacing, align)
-  ctx.setFillStyle(gradient)
-  drawSpacedText(ctx, text, x, y, letterSpacing, align)
-  ctx.restore()
 }
 
-function drawSpacedText(ctx, text, x, y, spacing = 0, align = 'left') {
-  if (!spacing) {
-    ctx.fillText(text, x, y)
-    return
-  }
+function pctToX(value) {
+  return (Number(value) / 100) * canvasWidth
+}
 
-  const chars = String(text).split('')
-  let startX = x
-  if (align === 'center') {
-    const totalWidth =
-      chars.reduce((sum, char) => sum + ctx.measureText(char).width, 0) + spacing * Math.max(chars.length - 1, 0)
-    startX = x - totalWidth / 2
-  } else if (align === 'right') {
-    const totalWidth =
-      chars.reduce((sum, char) => sum + ctx.measureText(char).width, 0) + spacing * Math.max(chars.length - 1, 0)
-    startX = x - totalWidth
-  }
+function pctToY(value) {
+  return (Number(value) / 100) * canvasHeight
+}
 
-  ctx.save()
-  ctx.setTextAlign('left')
-  let cursorX = startX
-  chars.forEach((char) => {
-    ctx.fillText(char, cursorX, y)
-    cursorX += ctx.measureText(char).width + spacing
+function getCanvasFontSize(item) {
+  const stageWidth = previewStageWidth.value || uni.getSystemInfoSync().windowWidth
+  const previewFontPx = uni.upx2px(item.size)
+  return Math.max(10, Math.round((previewFontPx * canvasWidth) / stageWidth))
+}
+
+function getFieldFontFamily(key) {
+  if (key === 'donorName') return certificateNameFontFamily
+  return certificateNumberFontFamily
+}
+
+function updatePreviewStageWidth() {
+  return new Promise((resolve) => {
+    nextTick(() => {
+      uni
+        .createSelectorQuery()
+        .select('.template-stage')
+        .boundingClientRect((rect) => {
+          if (rect?.width) {
+            previewStageWidth.value = rect.width
+          }
+          resolve()
+        })
+        .exec()
+    })
   })
-  ctx.restore()
 }
 
-function strokeEmbossPath(ctx, drawPath, options = {}) {
-  const {
-    light = 'rgba(201, 172, 149, 0.34)',
-    dark = '#7f5655',
-    width = 1.5,
-    offsetX = 0.9,
-    offsetY = 0.9,
-  } = options
-
-  ctx.save()
-  ctx.translate(offsetX, offsetY)
-  ctx.setStrokeStyle(light)
-  ctx.setLineWidth(width)
-  ctx.beginPath()
-  drawPath(ctx)
-  ctx.stroke()
-  ctx.restore()
-
-  ctx.save()
-  ctx.setStrokeStyle(dark)
-  ctx.setLineWidth(width)
-  ctx.beginPath()
-  drawPath(ctx)
-  ctx.stroke()
-  ctx.restore()
+function drawText(ctx, key, text) {
+  const item = currentPositions.value[key]
+  if (!item || text === undefined || text === null) return
+  ctx.setFillStyle('#241f1b')
+  ctx.setTextAlign('center')
+  ctx.setTextBaseline('middle')
+  ctx.font = `${item.weight || '500'} ${getCanvasFontSize(item)}px ${getFieldFontFamily(key)}`
+  ctx.fillText(String(text), pctToX(item.left), pctToY(item.top))
 }
 
-function drawCorner(ctx, x, y, scaleX = 1, scaleY = 1) {
-  ctx.save()
-  ctx.translate(x, y)
-  ctx.scale(scaleX, scaleY)
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(0, 128)
-    path.bezierCurveTo(0, 36, 36, 0, 128, 0)
-  }, { width: 1.45, dark: '#8c5f60' })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(14, 128)
-    path.bezierCurveTo(14, 48, 48, 14, 128, 14)
-  }, { width: 1.0, dark: '#a06f6c', light: 'rgba(210, 188, 171, 0.28)' })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(8, 20)
-    path.bezierCurveTo(32, 10, 58, 18, 76, 42)
-    path.bezierCurveTo(66, 44, 56, 54, 52, 70)
-    path.bezierCurveTo(40, 48, 24, 30, 6, 22)
-  }, { width: 1.55, dark: '#7a4d4f' })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(42, 10)
-    path.bezierCurveTo(58, 8, 74, 16, 86, 30)
-    path.bezierCurveTo(92, 14, 108, 4, 128, 6)
-    path.bezierCurveTo(112, 18, 100, 36, 96, 56)
-    path.bezierCurveTo(82, 38, 64, 20, 42, 10)
-  }, { width: 1.35, dark: '#835456' })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(16, 82)
-    path.bezierCurveTo(34, 88, 48, 106, 52, 126)
-    path.bezierCurveTo(66, 104, 84, 86, 108, 74)
-  }, { width: 1.3, dark: '#87585b' })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(18, 112)
-    path.bezierCurveTo(34, 104, 48, 110, 54, 126)
-  }, { width: 1.0, dark: '#9c6b69' })
-  strokeEmbossPath(ctx, (path) => {
-    path.arc(92, 18, 6, 0, Math.PI * 2)
-  }, { width: 1.15, dark: '#8d5e5d' })
-  strokeEmbossPath(ctx, (path) => {
-    path.arc(64, 44, 4.6, 0, Math.PI * 2)
-  }, { width: 1.0, dark: '#9a6868' })
-  strokeEmbossPath(ctx, (path) => {
-    path.arc(30, 92, 4.1, 0, Math.PI * 2)
-  }, { width: 0.95, dark: '#9e6d6c' })
-  ctx.restore()
-}
-
-function drawHeaderOrnament(ctx) {
-  ctx.save()
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(410, 126)
-    path.bezierCurveTo(458, 84, 516, 74, 566, 94)
-    path.bezierCurveTo(582, 68, 594, 58, 600, 58)
-    path.bezierCurveTo(606, 58, 618, 68, 634, 94)
-    path.bezierCurveTo(684, 74, 742, 84, 790, 126)
-  }, { width: 1.65, dark: '#845758' })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(452, 150)
-    path.bezierCurveTo(500, 118, 548, 116, 584, 142)
-    path.bezierCurveTo(590, 126, 596, 118, 600, 118)
-    path.bezierCurveTo(604, 118, 610, 126, 616, 142)
-    path.bezierCurveTo(652, 116, 700, 118, 748, 150)
-  }, { width: 1.25, dark: '#916463' })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(520, 92)
-    path.bezierCurveTo(544, 94, 560, 112, 566, 136)
-    path.bezierCurveTo(548, 138, 536, 148, 528, 164)
-    path.bezierCurveTo(534, 138, 532, 114, 520, 92)
-  }, { width: 1.15, dark: '#865859' })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(680, 92)
-    path.bezierCurveTo(656, 94, 640, 112, 634, 136)
-    path.bezierCurveTo(652, 138, 664, 148, 672, 164)
-    path.bezierCurveTo(666, 138, 668, 114, 680, 92)
-  }, { width: 1.15, dark: '#865859' })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(566, 78)
-    path.bezierCurveTo(582, 90, 592, 106, 600, 126)
-    path.bezierCurveTo(608, 106, 618, 90, 634, 78)
-  }, { width: 1.05, dark: '#9a6b67' })
-  strokeEmbossPath(ctx, (path) => {
-    path.arc(600, 138, 15.5, 0, Math.PI * 2)
-  }, { width: 1.0, dark: '#8f6160' })
-  ctx.restore()
-}
-
-function drawSideFlourish(ctx, x, y, flipX = 1) {
-  ctx.save()
-  ctx.translate(x, y)
-  ctx.scale(flipX, 1)
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(0, -48)
-    path.bezierCurveTo(16, -48, 28, -36, 30, -18)
-    path.bezierCurveTo(32, -2, 22, 12, 8, 18)
-    path.bezierCurveTo(24, 26, 34, 42, 32, 62)
-    path.bezierCurveTo(28, 82, 14, 94, -4, 96)
-  }, { width: 1.4 })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(10, -28)
-    path.bezierCurveTo(22, -26, 28, -14, 24, -2)
-    path.bezierCurveTo(20, 10, 10, 18, -6, 22)
-  }, { width: 1.15 })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(12, 24)
-    path.bezierCurveTo(24, 28, 30, 40, 28, 54)
-    path.bezierCurveTo(24, 68, 14, 78, 0, 82)
-  }, { width: 1.15 })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(6, 6)
-    path.bezierCurveTo(18, 2, 26, 6, 30, 18)
-  }, { width: 1.0 })
-  strokeEmbossPath(ctx, (path) => {
-    path.arc(24, 10, 4.2, 0, Math.PI * 2)
-  }, { width: 1.0 })
-  strokeEmbossPath(ctx, (path) => {
-    path.arc(22, 48, 3.8, 0, Math.PI * 2)
-  }, { width: 1.0 })
-  ctx.restore()
-}
-
-function drawMiniCornerFlourish(ctx, x, y, scaleX = 1, scaleY = 1) {
-  ctx.save()
-  ctx.translate(x, y)
-  ctx.scale(scaleX, scaleY)
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(0, 26)
-    path.bezierCurveTo(0, 8, 8, 0, 26, 0)
-  }, { width: 0.95, light: 'rgba(202, 173, 150, 0.24)', dark: 'rgba(157, 111, 101, 0.72)' })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(4, 10)
-    path.bezierCurveTo(12, 10, 18, 14, 20, 24)
-  }, { width: 0.95, light: 'rgba(202, 173, 150, 0.24)', dark: 'rgba(157, 111, 101, 0.72)' })
-  ctx.restore()
-}
-
-function drawLeafPair(ctx, x, y, flipX = 1) {
-  ctx.save()
-  ctx.translate(x, y)
-  ctx.scale(flipX, 1)
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(0, 0)
-    path.bezierCurveTo(14, -8, 28, -6, 36, 8)
-    path.bezierCurveTo(24, 8, 10, 12, 0, 22)
-  }, { width: 0.95, dark: '#9a6a68' })
-  strokeEmbossPath(ctx, (path) => {
-    path.moveTo(8, 8)
-    path.bezierCurveTo(18, 16, 22, 30, 18, 44)
-    path.bezierCurveTo(8, 34, 2, 22, 0, 10)
-  }, { width: 0.95, dark: '#9a6a68' })
-  ctx.restore()
-}
-
-function ensureSealImage() {
-  if (sealImagePath.value) {
-    return Promise.resolve(sealImagePath.value)
-  }
+function resolveImagePath(url) {
   return new Promise((resolve, reject) => {
-    uni.getImageInfo({
-      src: certificateLogoUrl,
+    uni.downloadFile({
+      url,
       success: (res) => {
-        sealImagePath.value = res.path
-        resolve(res.path)
+        if (res.statusCode >= 200 && res.statusCode < 300 && res.tempFilePath) {
+          resolve(res.tempFilePath)
+          return
+        }
+        reject(new Error(`template download failed: ${res.statusCode}`))
       },
       fail: reject,
     })
   })
 }
 
-function ensureBorderImage() {
-  if (borderImagePath.value) {
-    return Promise.resolve(borderImagePath.value)
-  }
-  return new Promise((resolve, reject) => {
-    uni.getImageInfo({
-      src: certificateBorderAsset,
-      success: (res) => {
-        borderImagePath.value = res.path
-        resolve(res.path)
-      },
-      fail: () => {
-        borderImagePath.value = certificateBorderAsset
-        resolve(certificateBorderAsset)
-      },
-    })
-  })
+async function ensureTemplateImage() {
+  templateImagePath.value = await resolveImagePath(selectedTemplateUrl.value)
 }
 
-function drawSealWatermark(ctx) {
-  if (!sealImagePath.value) return
-  ctx.save()
-  const centerX = 600
-  const centerY = 820
-  const diameter = 520
-  const drawX = centerX - diameter / 2
-  const drawY = centerY - diameter / 2
-
-  ctx.setGlobalAlpha(0.055)
-  ctx.beginPath()
-  ctx.arc(centerX, centerY, diameter / 2, 0, Math.PI * 2)
-  ctx.clip()
-  ctx.drawImage(sealImagePath.value, drawX, drawY, diameter, diameter)
-  ctx.restore()
-}
-
-function drawSealStamp(ctx) {
-  if (!sealImagePath.value) return
-  ctx.save()
-  const centerX = 840
-  const centerY = 1298
-  const diameter = 156
-  const drawX = centerX - diameter / 2
-  const drawY = centerY - diameter / 2
-
-  ctx.setGlobalAlpha(0.82)
-  ctx.beginPath()
-  ctx.arc(centerX, centerY, diameter / 2, 0, Math.PI * 2)
-  ctx.clip()
-  ctx.drawImage(sealImagePath.value, drawX, drawY, diameter, diameter)
-  ctx.restore()
-}
-
-function drawSubtleFrame(ctx, width, height) {
-  ctx.save()
-  ctx.setStrokeStyle('rgba(149, 103, 98, 0.78)')
-  ctx.setLineWidth(1.15)
-  ctx.strokeRect(46, 46, width - 92, height - 92)
-  ctx.strokeRect(58, 58, width - 116, height - 116)
-  ctx.setStrokeStyle('rgba(203, 177, 154, 0.26)')
-  ctx.setLineWidth(0.7)
-  ctx.strokeRect(72, 72, width - 144, height - 144)
-  ctx.restore()
-
-  drawCorner(ctx, 54, 54, 1, 1)
-  drawCorner(ctx, width - 54, 54, -1, 1)
-  drawCorner(ctx, 54, height - 54, 1, -1)
-  drawCorner(ctx, width - 54, height - 54, -1, -1)
-  drawMiniCornerFlourish(ctx, 92, 92, 1, 1)
-  drawMiniCornerFlourish(ctx, width - 92, 92, -1, 1)
-  drawMiniCornerFlourish(ctx, 92, height - 92, 1, -1)
-  drawMiniCornerFlourish(ctx, width - 92, height - 92, -1, -1)
-  drawSideFlourish(ctx, 72, 380, 1)
-  drawSideFlourish(ctx, width - 72, 380, -1)
-  drawSideFlourish(ctx, 72, height - 430, 1)
-  drawSideFlourish(ctx, width - 72, height - 430, -1)
-  drawLeafPair(ctx, 120, 330, 1)
-  drawLeafPair(ctx, width - 120, 330, -1)
-  drawLeafPair(ctx, 120, height - 380, 1)
-  drawLeafPair(ctx, width - 120, height - 380, -1)
-  drawHeaderOrnament(ctx)
-}
-
-function drawPaperTexture(ctx, width, height) {
-  ctx.save()
-  ctx.setFillStyle('rgba(120, 102, 78, 0.018)')
-  for (let i = 0; i < 24; i += 1) {
-    const x = 54 + (i % 6) * 184
-    const y = 54 + Math.floor(i / 6) * 392
-    ctx.beginPath()
-    ctx.arc(x, y, 54, 0, Math.PI * 2)
-    ctx.fill()
-  }
-  ctx.restore()
-}
-
-function drawFoilLogo(ctx, centerX, topY, size) {
-  if (!sealImagePath.value) return
-  const drawX = centerX - size / 2
-  const drawY = topY
-  const radius = size / 2
-  const badgeGradient = ctx.createLinearGradient(drawX, drawY, drawX + size, drawY + size)
-  badgeGradient.addColorStop(0, '#fcf6e8')
-  badgeGradient.addColorStop(0.5, '#f5edd8')
-  badgeGradient.addColorStop(1, '#efe3c0')
-
-  ctx.save()
-  ctx.setGlobalAlpha(0.1)
-  ctx.setFillStyle('rgba(176, 141, 71, 0.18)')
-  ctx.beginPath()
-  ctx.arc(centerX, drawY + radius + 4, radius + 12, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.restore()
-
-  ctx.save()
-  ctx.beginPath()
-  ctx.arc(centerX, drawY + radius, radius, 0, Math.PI * 2)
-  ctx.clip()
-  ctx.setFillStyle(badgeGradient)
-  ctx.fillRect(drawX, drawY, size, size)
-  const inset = 10
-  ctx.setGlobalAlpha(1)
-  ctx.drawImage(sealImagePath.value, drawX + inset, drawY + inset, size - inset * 2, size - inset * 2)
-  ctx.setGlobalAlpha(0.18)
-  ctx.setFillStyle('rgba(214, 191, 129, 0.95)')
-  ctx.fillRect(drawX + inset, drawY + inset, size - inset * 2, size - inset * 2)
-  ctx.restore()
-
-  ctx.save()
-  ctx.setStrokeStyle('rgba(190, 151, 62, 0.92)')
-  ctx.setLineWidth(2.2)
-  ctx.beginPath()
-  ctx.arc(centerX, drawY + radius, radius + 1.5, 0, Math.PI * 2)
-  ctx.stroke()
-  ctx.setStrokeStyle('rgba(222, 201, 138, 0.82)')
-  ctx.setLineWidth(1.1)
-  ctx.beginPath()
-  ctx.arc(centerX, drawY + radius, radius - 5.5, 0, Math.PI * 2)
-  ctx.stroke()
-  ctx.restore()
-}
-
-function drawTopIdentity(ctx, width) {
-  if (!sealImagePath.value) return
-  drawFoilLogo(ctx, width - 255, 1110, 124)
-}
-
-function drawHighlightedName(ctx, data) {
-  const prefix = '尊敬的 '
-  const suffix = ' 理事：'
-  const startX = 166
-  const baselineY = 638
-
-  ctx.setFillStyle('#4e4032')
-  applyCanvasFont(ctx, 38, '"STSong","SimSun",serif', '600')
-  ctx.fillText(prefix, startX, baselineY)
-
-  const prefixWidth = ctx.measureText(prefix).width
-  const nameX = startX + prefixWidth
-  applyCanvasFont(ctx, 48, '"STSong","SimSun",serif', '700')
-  ctx.fillText(data.donor_name, nameX, baselineY)
-  ctx.fillText(data.donor_name, nameX + 1.2, baselineY)
-
-  const nameWidth = ctx.measureText(data.donor_name).width
-  applyCanvasFont(ctx, 38, '"STSong","SimSun",serif', '600')
-  ctx.fillText(suffix, nameX + nameWidth + 8, baselineY)
-}
-
-function exportPoster() {
-  uni.canvasToTempFilePath({
-    canvasId: 'certificateCanvas',
-    x: 0,
-    y: 0,
-    width: canvasWidth,
-    height: canvasHeight,
-    destWidth: canvasWidth,
-    destHeight: canvasHeight,
-    fileType: 'png',
-    quality: 1,
-    success: (res) => {
-      posterPath.value = res.tempFilePath
-    },
-    fail: () => {
-      errorText.value = '证书生成失败，请稍后再试'
-    },
-  })
-}
-
-function drawCertificate(data) {
+async function drawCertificate() {
+  if (!templateImagePath.value) return
+  await updatePreviewStageWidth()
   const ctx = uni.createCanvasContext('certificateCanvas')
-  const width = canvasWidth
-  const height = canvasHeight
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight)
+  ctx.drawImage(templateImagePath.value, 0, 0, canvasWidth, canvasHeight)
 
-  ctx.setFillStyle('#faf7f1')
-  ctx.fillRect(0, 0, width, height)
-  const borderSrc = borderImagePath.value || certificateBorderAsset
-  if (borderSrc) {
-    ctx.drawImage(borderSrc, 0, 0, width, height)
-  } else {
-    ctx.setFillStyle('#f8f4ea')
-    ctx.fillRect(0, 0, width, height)
-    ctx.setFillStyle('#f5efe2')
-    ctx.fillRect(24, 24, width - 48, height - 48)
-    ctx.setFillStyle('rgba(255, 252, 245, 0.94)')
-    ctx.fillRect(78, 78, width - 156, height - 156)
-    drawPaperTexture(ctx, width, height)
-    drawSubtleFrame(ctx, width, height)
+  drawText(ctx, 'donorName', certificateData.value.donorName)
+  if (selectedTemplateHasCurrentDonation.value) {
+    drawText(ctx, 'currentAmount', displayCertificateData.value.currentYearAmount)
   }
-  drawSealWatermark(ctx)
-  drawTopIdentity(ctx, width)
-
-  drawFoilText(ctx, '捐赠证书', width / 2, 438, {
-    size: 108,
-    family: '"Source Han Sans SC","Noto Sans CJK SC","Microsoft YaHei","PingFang SC",sans-serif',
-    weight: '700',
-    align: 'center',
-    letterSpacing: 8,
-    glow: true,
-  })
-
-  drawFoilText(ctx, 'CERTIFICATE OF DONATION', width / 2, 508, {
-    size: 26,
-    family: '"Times New Roman","Times",serif',
-    weight: '700',
-    align: 'center',
-    letterSpacing: 3,
-  })
-
-  drawHighlightedName(ctx, data)
-
-  applyCanvasFont(ctx, 34, '"STSong","SimSun",serif', '600')
-  ctx.setFillStyle('#4a433c')
-  const lines = [
-    `感谢您今年捐赠人民币 ${formatAmount(data.current_year_amount)} 元，截至目前，您已累计捐赠 ${formatAmount(data.total_amount)} 元。`,
-    '您的福业，福莲的未来。您的每一分捐赠，都将用于连城教育事业的发展！',
-    '花开福莲，香溢四海！',
-  ]
-
-  let y = 760
-  lines.forEach((line, index) => {
-    y = wrapText(ctx, line, 188, y, 824, 76, 50)
-    y += index === lines.length - 1 ? 0 : 20
-  })
-
-  ctx.setFillStyle('#4c4338')
-  ctx.setTextAlign('right')
-  applyCanvasFont(ctx, 38, '"STSong","SimSun",serif', '600')
-  ctx.fillText('福莲教育促进会', width - 156, 1328)
-  applyCanvasFont(ctx, 32, '"STSong","SimSun",serif', '600')
-  ctx.fillText(formatIssuedOn(data.issued_on), width - 156, 1390)
-  ctx.setTextAlign('left')
+  drawText(ctx, totalAmountKey.value, displayCertificateData.value.totalAmount)
+  drawText(ctx, 'supportYears', certificateData.value.supportYears)
+  drawText(ctx, 'issuedYear', issuedDate.value.year)
+  drawText(ctx, 'issuedMonth', issuedDate.value.month)
+  drawText(ctx, 'issuedDay', issuedDate.value.day)
 
   ctx.draw(false, () => {
     setTimeout(() => {
-      exportPoster()
-    }, 180)
+      uni.canvasToTempFilePath({
+        canvasId: 'certificateCanvas',
+        x: 0,
+        y: 0,
+        width: canvasWidth,
+        height: canvasHeight,
+        destWidth: canvasWidth,
+        destHeight: canvasHeight,
+        fileType: 'jpg',
+        quality: 1,
+        success: (res) => {
+          posterPath.value = res.tempFilePath
+        },
+        fail: () => {
+          errorText.value = '证书图片生成失败，请重新生成'
+        },
+      })
+    }, 250)
   })
 }
 
 async function loadData() {
   member.value = getMember()
+  templateCacheKey.value = Date.now()
   posterPath.value = ''
   errorText.value = ''
+  rawCertificate.value = null
+  templateImagePath.value = ''
   if (!loggedIn.value || memberState.value !== 'bound') return
 
   loading.value = true
   try {
-    await Promise.all([ensureSealImage(), ensureBorderImage()])
     const res = await getMemberCertificate()
     if (!res?.total_count) {
       errorText.value = '当前暂无可生成证书的捐赠数据'
       return
     }
-    drawCertificate(res)
-  } catch {
-    errorText.value = '证书数据加载失败，请稍后再试'
+    rawCertificate.value = res
+    if (serverPosterUrl.value) {
+      posterPath.value = ''
+      return
+    }
+    await ensureTemplateImage()
+    await drawCertificate()
+  } catch (error) {
+    console.error('load certificate failed', error)
+    errorText.value = '证书数据或模板加载失败，请稍后再试'
   } finally {
     loading.value = false
   }
 }
 
+function toggleTemplateDebug(event) {
+  if (!certificateDebugEnabled) return
+  templateDebugMode.value = !!event.detail.value
+  if (templateDebugMode.value && !debugTemplateKey.value) {
+    debugTemplateKey.value = autoTemplateKey.value
+  }
+  if (!templateDebugMode.value) {
+    debugTemplateKey.value = ''
+  }
+}
+
+function toggleCoordinate(event) {
+  if (!certificateDebugEnabled) return
+  coordinateMode.value = !!event.detail.value
+}
+
 function refreshCertificate() {
+  templateCacheKey.value = Date.now()
   loadData().catch(() => {})
+}
+
+function selectDebugTemplate(key) {
+  if (!certificateDebugEnabled) return
+  debugTemplateKey.value = key
+  templateCacheKey.value = Date.now()
 }
 
 function goMy() {
   uni.switchTab({ url: '/pages/my/index' })
 }
 
-function savePoster() {
-  if (!posterPath.value) {
+function previewCertificate() {
+  const imageUrl = serverPosterUrl.value || posterPath.value || previewImageUrl.value
+  if (!imageUrl) {
+    uni.showToast({ title: '证书仍在生成，请稍后再试', icon: 'none' })
+    return
+  }
+  uni.previewImage({
+    current: imageUrl,
+    urls: [imageUrl],
+  })
+}
+
+async function savePoster() {
+  let filePath = posterPath.value
+
+  const hasAlbumPermission = await ensureSaveAlbumPermission()
+  if (!hasAlbumPermission) return
+
+  if (serverPosterUrl.value) {
+    try {
+      filePath = await resolveImagePath(serverPosterUrl.value)
+    } catch (error) {
+      console.error('download certificate poster failed', error)
+      uni.showToast({ title: '证书下载失败，请稍后再试', icon: 'none' })
+      return
+    }
+  }
+
+  if (!filePath) {
     uni.showToast({ title: '证书仍在生成，请稍后再试', icon: 'none' })
     return
   }
   uni.saveImageToPhotosAlbum({
-    filePath: posterPath.value,
+    filePath,
     success: () => {
       uni.showToast({ title: '已保存到相册', icon: 'none' })
     },
-    fail: () => {
-      uni.showToast({ title: '保存失败，请检查系统权限', icon: 'none' })
+    fail: (error) => {
+      const message = String(error?.errMsg || error?.message || '')
+      if (isPermissionDenied(message)) {
+        showPermissionGuide('需要打开相册权限后才能保存证书')
+      } else {
+        uni.showToast({ title: '保存失败，请稍后再试', icon: 'none' })
+      }
+    },
+  })
+}
+
+function ensureSaveAlbumPermission() {
+  return new Promise((resolve) => {
+    // #ifndef MP-WEIXIN
+    resolve(true)
+    // #endif
+
+    // #ifdef MP-WEIXIN
+    uni.getSetting({
+      success: (setting) => {
+        const value = setting.authSetting?.['scope.writePhotosAlbum']
+        if (value === true) {
+          resolve(true)
+          return
+        }
+        if (value === false) {
+          showPermissionGuide('需要打开相册权限后才能保存证书')
+          resolve(false)
+          return
+        }
+        uni.authorize({
+          scope: 'scope.writePhotosAlbum',
+          success: () => resolve(true),
+          fail: () => {
+            showPermissionGuide('需要打开相册权限后才能保存证书')
+            resolve(false)
+          },
+        })
+      },
+      fail: () => resolve(true),
+    })
+    // #endif
+  })
+}
+
+function isPermissionDenied(message) {
+  return /auth|authorize|permission|denied|fail auth|privacy|相册|权限/i.test(message)
+}
+
+function showPermissionGuide(content) {
+  uni.showModal({
+    title: '权限未开启',
+    content,
+    confirmText: '去设置',
+    success: (res) => {
+      if (res.confirm) {
+        uni.openSetting()
+      }
     },
   })
 }
 
 onShow(() => {
   loadData().catch(() => {})
+})
+
+watch(selectedTemplateKey, async () => {
+  if (!rawCertificate.value || loading.value || serverPosterUrl.value) return
+  posterPath.value = ''
+  errorText.value = ''
+  templateCacheKey.value = Date.now()
+  try {
+    await ensureTemplateImage()
+    await drawCertificate()
+  } catch (error) {
+    console.error('switch certificate template failed', error)
+    errorText.value = '证书模板切换失败，请稍后再试'
+  }
 })
 </script>
 
@@ -713,23 +631,16 @@ onShow(() => {
 
 .certificate-intro {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 20rpx;
 }
 
-.intro-chip {
+.certificate-type {
   flex-shrink: 0;
-  min-width: 108rpx;
-  height: 52rpx;
-  padding: 0 18rpx;
-  border-radius: 999rpx;
-  background: #f4ede3;
-  color: #8b6c3f;
+  color: #a27b42;
   font-size: 22rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-weight: 700;
 }
 
 .certificate-panel {
@@ -739,27 +650,187 @@ onShow(() => {
 }
 
 .certificate-preview {
-  padding: 22rpx;
-  background: linear-gradient(180deg, #f7f2e8 0%, #fdfaf3 100%);
+  padding: 18rpx;
+  background: #f8fbff;
   border-radius: 24rpx;
-  margin-bottom: 24rpx;
-  border: 1px solid rgba(214, 199, 165, 0.8);
+  margin-bottom: 20rpx;
+  border: 1px solid rgba(212, 222, 236, 0.9);
 }
 
-.certificate-image {
+.template-stage {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 14rpx;
+  background: #fbf4e8;
+}
+
+.template-stage.calibrating {
+  box-shadow: inset 0 0 0 2rpx rgba(72, 82, 145, 0.5);
+}
+
+.template-image {
   display: block;
   width: 100%;
-  border-radius: 18rpx;
-  background: #f8f1e4;
+  background: #fbf4e8;
 }
 
-.preview-empty {
-  padding: 60rpx 20rpx;
+.fill-text {
+  position: absolute;
+  color: #241f1b;
+  font-family: "Songti SC", STSong, SimSun, STFangsong, FangSong, serif;
+  text-align: center;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+.calibration-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(72, 82, 145, 0.18) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(72, 82, 145, 0.18) 1px, transparent 1px),
+    linear-gradient(to right, rgba(176, 124, 64, 0.36) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(176, 124, 64, 0.36) 1px, transparent 1px);
+  background-size: 10% 10%, 10% 10%, 50% 50%, 50% 50%;
+  pointer-events: none;
+}
+
+.calibration-axis {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(220, 78, 78, 0.55);
+}
+
+.x-axis {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+}
+
+.y-axis {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+}
+
+.calibration-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.marker-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #d94a48;
+  box-shadow: 0 0 0 6rpx rgba(217, 74, 72, 0.18);
+}
+
+.marker-label {
+  position: absolute;
+  left: 14rpx;
+  top: 12rpx;
+  padding: 4rpx 8rpx;
+  border-radius: 6rpx;
+  background: rgba(23, 34, 51, 0.82);
+  color: #ffffff;
+  font-size: 18rpx;
+  white-space: nowrap;
+}
+
+.calibration-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 76rpx;
+  border-bottom: 1rpx solid rgba(218, 226, 238, 0.95);
+}
+
+.calibration-title {
+  color: #1b2536;
+  font-size: 27rpx;
+  font-weight: 700;
+}
+
+.calibration-template {
+  margin-top: 6rpx;
+  color: #74829a;
+  font-size: 20rpx;
+}
+
+.template-debug-panel {
+  padding: 18rpx 0 4rpx;
+  border-bottom: 1rpx solid rgba(218, 226, 238, 0.95);
+}
+
+.template-debug-title {
+  margin-bottom: 14rpx;
+  color: #1b2536;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.template-debug-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12rpx;
+}
+
+.template-debug-option {
+  min-height: 64rpx;
+  border: 1rpx solid rgba(156, 169, 190, 0.55);
+  border-radius: 12rpx;
+  color: #536177;
+  font-size: 23rpx;
+  font-weight: 700;
+  line-height: 64rpx;
+  text-align: center;
+  background: #f8fbff;
+}
+
+.template-debug-option.active {
+  border-color: #485291;
+  color: #ffffff;
+  background: #485291;
+  box-shadow: 0 10rpx 24rpx rgba(72, 82, 145, 0.18);
+}
+
+.coordinate-panel {
+  margin: 18rpx 0 22rpx;
+  padding: 16rpx 0;
+  border-top: 1rpx solid rgba(218, 226, 238, 0.95);
+  border-bottom: 1rpx solid rgba(218, 226, 238, 0.95);
+}
+
+.coordinate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 8rpx 0;
+}
+
+.coordinate-name {
+  color: #1b2536;
+  font-size: 23rpx;
+  font-weight: 700;
+}
+
+.coordinate-value {
+  color: #74829a;
+  font-size: 22rpx;
 }
 
 .certificate-actions {
   display: flex;
   gap: 16rpx;
+  margin-top: 22rpx;
 }
 
 .action-btn {
@@ -770,11 +841,14 @@ onShow(() => {
   margin-top: 24rpx;
 }
 
-.hidden-canvas {
+.export-canvas {
   position: fixed;
   left: -9999px;
   top: -9999px;
+  width: 1870px;
+  height: 1322px;
   opacity: 0;
   pointer-events: none;
+  z-index: 0;
 }
 </style>

@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 import re
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -335,6 +335,18 @@ class MemberBindingRequestCreate(BaseModel):
         return phone
 
 
+class MemberAutoBindingIn(MemberBindingRequestCreate):
+    confirm_create: bool = False
+
+
+class MemberAutoBindingOut(BaseModel):
+    result: Literal["bound", "confirm_create", "manual_review"]
+    message: str
+    donor_id: Optional[int] = None
+    donor_name: Optional[str] = None
+    request_id: Optional[int] = None
+
+
 class MemberBindingRequestOut(BaseModel):
     id: int
     member_id: int
@@ -413,8 +425,12 @@ class MemberCertificateOut(BaseModel):
     first_year: Optional[int] = None
     current_year: int
     support_years: int = 0
+    member_level: str = "non_member"
+    member_level_label: str = "非会员"
     title: str
     subtitle: str
     message: str
     footer: str
     issued_on: str
+    template_key: Optional[str] = None
+    poster_url: Optional[str] = None

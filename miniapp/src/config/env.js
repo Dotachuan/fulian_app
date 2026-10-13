@@ -17,3 +17,15 @@ export function getBaseUrl() {
 
   return H5_API_BASE_URL
 }
+
+export function getAssetOrigin() {
+  // #ifdef MP-WEIXIN
+  return REMOTE_API_ORIGIN
+  // #endif
+
+  // #ifdef H5
+  return import.meta.env.VITE_H5_ASSET_ORIGIN || LOCAL_API_ORIGIN
+  // #endif
+
+  return LOCAL_API_ORIGIN
+}
